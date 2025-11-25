@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    postgresql-14 \
+    postgresql-contrib-14 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /docker-entrypoint-initdb.d
+
+COPY config/database/init.sql /docker-entrypoint-initdb.d/
+
+RUN chown -R postgres:postgres /var/lib/postgresql
+RUN chmod 755 /docker-entrypoint-initdb.d/init.sql
+
+USER postgres
+
+RUN mkdir -p /var/run/postgresql && chmod 2777 /var/run/postgresql
+
+ENV PGDATA /var/lib/postgresql/data
+ENV POSTGRES_HOST_AUTH_METHOD trust
+
+EXPOSE 5432
+
+CMD ["postgres", "-c", "config_file=/etc/postgresql/14/main/postgresql.conf"]

@@ -1,0 +1,19 @@
+FROM ubuntu:22.04
+
+# For C++ version, same as above. For alternative:
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY chinta-net/requirements.txt .
+
+RUN pip3 install -r requirements.txt
+
+COPY chinta-net .
+
+EXPOSE 8082
+
+CMD ["python3", "app.py", "--config", "/etc/chinta/chinta-net.yaml"]

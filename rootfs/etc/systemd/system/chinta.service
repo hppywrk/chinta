@@ -1,0 +1,20 @@
+[Unit]
+Description=Chinta Backend Service
+After=chinta-db.service
+Requires=chinta-db.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker stop chinta-backend
+ExecStartPre=-/usr/bin/docker rm chinta-backend
+ExecStart=/usr/bin/docker run --name chinta-backend \
+    --network chinta-network \
+    -p 8080:8080 \
+    -v /path/to/your/config:/etc/chinta:ro \
+    chinta-backend
+ExecStop=/usr/bin/docker stop chinta-backend
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

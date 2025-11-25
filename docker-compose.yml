@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  chinta-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: chinta-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/database:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_DB=chinta
+      - POSTGRES_USER=chinta_user
+      - POSTGRES_PASSWORD=chinta_password
+    networks:
+      - chinta-network
+
+  chinta-backend:
+    build:
+      context: ./chinta
+      dockerfile: Dockerfile
+    container_name: chinta-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - chinta-db
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      - CHINTA_DB_HOST=chinta-db
+      - CHINTA_DB_PORT=5432
+    networks:
+      - chinta-network
+
+  chinta-find:
+    build:
+      context: ./chinta-find
+      dockerfile: Dockerfile
+    container_name: chinta-find
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    depends_on:
+      - chinta-db
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      - CHINTA_DB_HOST=chinta-db
+      - CHINTA_DB_PORT=5432
+    networks:
+      - chinta-network
+
+  chinta-net:
+    build:
+      context: ./chinta-net
+      dockerfile: Dockerfile
+    container_name: chinta-net
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    depends_on:
+      - chinta-backend
+      - chinta-find
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      - CHINTA_BACKEND_URL=http://chinta-backend:8080
+      - CHINTA_FIND_URL=http://chinta-find:8081
+    networks:
+      - chinta-network
+
+  chinta-web:
+    build:
+      context: ./chinta-web
+      dockerfile: Dockerfile
+    container_name: chinta-web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - chinta-net
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      - CHINTA_NET_URL=http://chinta-net:8082
+    networks:
+      - chinta-network
+
+volumes:
+  postgres_data:
+
+networks:
+  chinta-network:
+    driver: bridge

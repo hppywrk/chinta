@@ -1,0 +1,13 @@
+server:
+  port: ${CHINTA_PORT:-8080}  # Environment variable with default
+  host: "0.0.0.0"
+
+database:
+  host: ${CHINTA_DB_HOST:-localhost}
+  port: ${CHINTA_DB_PORT:-5432}
+  name: ${CHINTA_DB_NAME:-chinta}
+  user: ${CHINTA_DB_USER:-chinta_user}
+  password: ${CHINTA_DB_PASSWORD:-chinta_password}
+
+logging:
+  level: ${LOG_LEVEL:-info}

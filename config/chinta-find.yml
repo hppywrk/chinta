@@ -1,0 +1,18 @@
+server:
+  port: 8081
+  threads: 4
+
+database:
+  host: "chinta-db"
+  port: 5432
+  name: "chinta"
+  user: "chinta_user"
+  password: "chinta_password"
+
+search:
+  max_results: 100
+  default_limit: 20
+
+logging:
+  level: "info"
+  file: "/var/log/chinta/chinta-find.log"
