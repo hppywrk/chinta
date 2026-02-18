@@ -91,6 +91,22 @@ services:
     networks:
       - chinta-network
 
+  chinta-auth:
+    build:
+      context: ./chinta-auth
+      dockerfile: Dockerfile
+    container_name: chinta-auth
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      - OIDC_ISSUER=${OIDC_ISSUER:-https://accounts.google.com}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OIDC_REDIRECT_URI_BASE=${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+    networks:
+      - chinta-network
+
 volumes:
   postgres_data:
 

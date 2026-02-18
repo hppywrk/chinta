@@ -1,0 +1,174 @@
+openapi: 3.0.0
+info:
+  title: Chinta Auth API
+  version: 1.0.0
+  description: OpenID Connect authentication service
+
+paths:
+  /authenticate:
+    post:
+      summary: Authenticate with authorization code
+      description: Exchanges an OIDC authorization code for tokens (access, id, refresh)
+      operationId: authenticate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticateRequest'
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request or code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/authorize:
+    get:
+      summary: Get authorization URL
+      description: Returns the OpenID Connect authorization URL to redirect the user to the IdP
+      operationId: getAuthorizeUrl
+      parameters:
+        - in: query
+          name: redirect_uri
+          required: true
+          schema:
+            type: string
+            format: uri
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: nonce
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authorization URL and state/nonce for later use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizeUrlResponse'
+
+  /userinfo:
+    get:
+      summary: Get user info
+      description: Returns OpenID Connect userinfo claims for the given access token
+      operationId: userinfo
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User info claims
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          description: Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthenticateRequest:
+      type: object
+      required:
+        - code
+        - redirect_uri
+      properties:
+        code:
+          type: string
+          description: Authorization code from IdP callback
+        redirect_uri:
+          type: string
+          format: uri
+          description: Same redirect_uri used in the authorization request
+        state:
+          type: string
+        nonce:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        id_token:
+          type: string
+        scope:
+          type: string
+
+    AuthorizeUrlResponse:
+      type: object
+      required:
+        - authorize_url
+        - state
+      properties:
+        authorize_url:
+          type: string
+          format: uri
+        state:
+          type: string
+        nonce:
+          type: string
+
+    UserInfo:
+      type: object
+      description: OpenID Connect userinfo claims (subset)
+      properties:
+        sub:
+          type: string
+          description: Subject identifier
+        name:
+          type: string
+        preferred_username:
+          type: string
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        given_name:
+          type: string
+        family_name:
+          type: string
+        picture:
+          type: string
+          format: uri
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        error_description:
+          type: string
