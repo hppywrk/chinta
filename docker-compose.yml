@@ -107,6 +107,28 @@ services:
     networks:
       - chinta-network
 
+  chinta-gateway:
+    build:
+      context: ./chinta-gateway
+      dockerfile: Dockerfile
+    container_name: chinta-gateway
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    depends_on:
+      - chinta-auth
+      - chinta-backend
+      - chinta-web
+    environment:
+      - CHINTA_AUTH_URL=http://chinta-auth:8083
+      - CHINTA_WEB_URL=http://chinta-web:8000
+      - CHINTA_MOBILE_URL=http://chinta-web:8000/m
+      - CHINTA_BACKEND_URL=http://chinta-backend:8080
+      - CHINTA_AUTH_CALLBACK_URL=http://localhost:8084/auth/callback
+      - CHINTA_GATEWAY_PORT=8084
+    networks:
+      - chinta-network
+
 volumes:
   postgres_data:
 
