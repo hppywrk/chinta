@@ -3,7 +3,7 @@ from typing import Optional
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 
@@ -40,7 +40,6 @@ async def health():
 @app.get("/")
 async def root(request: Request):
     """Redirect to desktop or mobile UI based on a simple hint."""
-    # Very simple heuristic: explicit query wins, otherwise User-Agent sniff
     target = request.query_params.get("target")
     if target == "mobile":
         return RedirectResponse(MOBILE_UI_URL)
@@ -53,56 +52,35 @@ async def root(request: Request):
     return RedirectResponse(WEB_UI_URL)
 
 
-@app.get("/auth/login")
-async def login(redirect_uri: Optional[str] = None):
+@app.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_auth(request: Request, path: str):
     """
-    Start login by asking Auth service for an authorization URL.
-
-    In a browser flow the frontend would call this, then redirect the user
-    to the returned URL.
+    Blind proxy to the auth service. Gateway does not interpret auth semantics;
+    it only forwards requests and responses. Authentication flow (login, callback,
+    token exchange) is entirely owned by the auth service.
     """
-    # Where should the IdP send the user back? By default, our own /auth/callback
-    redirect = redirect_uri or os.environ.get(
-        "CHINTA_AUTH_CALLBACK_URL",
-        "http://localhost:8084/auth/callback",
-    )
+    url = f"{AUTH_BASE_URL}/auth/{path}"
+    method = request.method
+    params = dict(request.query_params)
+    body = await request.body() if method in ("POST", "PUT", "PATCH") else None
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "connection", "content-length")
+    }
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{AUTH_BASE_URL}/auth/authorize",
-            params={"redirect_uri": redirect},
+        resp = await client.request(
+            method,
+            url,
+            params=params,
+            content=body,
+            headers=headers,
             timeout=10.0,
         )
-    resp.raise_for_status()
-    data = resp.json()
-    return data
-
-
-@app.get("/auth/callback")
-async def auth_callback(code: str, state: Optional[str] = None, nonce: Optional[str] = None):
-    """
-    Receive code from IdP (via Auth service redirect).
-
-    For now we just exchange it for tokens via Auth service and return them
-    to the caller. A real system would set cookies, etc.
-    """
-    redirect_uri = os.environ.get(
-        "CHINTA_AUTH_CALLBACK_URL",
-        "http://localhost:8084/auth/callback",
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers=dict(resp.headers),
     )
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{AUTH_BASE_URL}/authenticate",
-            json={
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "state": state,
-                "nonce": nonce,
-            },
-            timeout=10.0,
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
-    return resp.json()
 
 
 @app.get("/me")

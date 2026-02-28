@@ -136,6 +136,32 @@ async def authenticate(body: AuthenticateRequest):
     return token
 
 
+@app.get("/auth/callback")
+async def auth_callback(
+    code: str,
+    redirect_uri: str,
+    state: str | None = None,
+    nonce: str | None = None,
+):
+    """
+    Same as POST /authenticate but for GET (e.g. browser redirect with code in query).
+    Keeps OAuth code exchange entirely inside auth service; gateway can proxy blindly.
+    """
+    client = await get_oidc_client(redirect_uri=redirect_uri)
+    try:
+        token = await client.fetch_token(
+            client.token_endpoint,
+            code=code,
+            redirect_uri=redirect_uri,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "token_exchange_failed", "error_description": str(e)},
+        )
+    return token
+
+
 @app.get("/userinfo")
 async def userinfo(access_token: str = Depends(get_token_from_header)):
     """Return OpenID Connect userinfo claims for the given access token."""
