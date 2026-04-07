@@ -164,3 +164,7 @@ Deployment target:
 ## 13) Change Log
 
 - v1 (2026-04-03): Initial plan created from architecture discussion.
+- v1.1 (2026-04-03): Added concrete v1 artifacts:
+  - `docs/CONTROL_PLANE_DDL_V1.sql`
+  - `docs/API_CONTRACTS_V1.md`
+  - `docs/IMPLEMENTATION_BACKLOG_V1.md`
