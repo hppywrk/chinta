@@ -10,6 +10,8 @@ This backlog is ordered for lowest-risk delivery and quickest end-to-end path:
 3) migration/promotion flows  
 4) billing maturity
 
+Additionally, complex subsystems are intentionally split into MVP-first and hardening tasks so delivery can start early without blocking on full automation.
+
 ---
 
 ## 0) Foundations and guardrails
@@ -26,6 +28,32 @@ Tasks:
 Definition of done:
 - Fresh DB bootstrap succeeds in CI.
 - Migration artifacts are versioned and repeatable.
+
+### B0.2 Define architecture boundaries for data access layer
+Priority: P0  
+Dependencies: none
+
+Tasks:
+- Define repository and `UnitOfWork` interfaces in a shared package.
+- Keep domain/application code free of ORM-specific imports.
+- Define `TenantContextProvider` contract for tenant-aware query execution.
+
+Definition of done:
+- At least one service compiles and runs against interface-only data access contracts.
+- Adapter swap (full ORM vs simplified adapter) is possible without domain changes.
+
+### B0.3 Create deployment profiles (full vs simplified)
+Priority: P1  
+Dependencies: B0.2
+
+Tasks:
+- Define profile toggles: `full-multitenant`, `shared-simplified`, `single-tenant`.
+- Document which components are mandatory/optional per profile.
+- Add startup validation so invalid profile combinations fail fast.
+
+Definition of done:
+- Profile matrix is documented and executable in local/dev environments.
+- CI runs at least one simplified profile smoke test.
 
 ---
 
@@ -162,6 +190,32 @@ Definition of done:
 - Interrupted migration can resume without corruption.
 - Dry-run mode reports planned work.
 
+### B5.3 Add data migration SDK contract (MVP)
+Priority: P2  
+Dependencies: B5.2, B0.2
+
+Tasks:
+- Define migration script interface (version metadata, tenant context, transaction contract).
+- Add packaging convention for module-provided schema/data migration bundles.
+- Add runner support to execute both DDL and data backfill steps in order.
+
+Definition of done:
+- One reference module includes a data migration script executed by CI.
+- Failed data migration marks tenant/module state clearly and supports retry.
+
+### B5.4 Migration hardening stages (post-MVP)
+Priority: P2  
+Dependencies: B5.2
+
+Tasks:
+- Add canary-tenant rollout mode before full tenant batches.
+- Add automatic pause thresholds (error rate, runtime, lock contention).
+- Add rollback playbook commands and operator runbook docs.
+
+Definition of done:
+- Runner supports canary then full rollout strategy.
+- Operators can pause/resume/rollback with audited commands.
+
 ---
 
 ## 6) Dedicated promotion worker (freeze/move/switch)
@@ -274,3 +328,5 @@ Outcome:
   - Mitigation: central decision endpoint and shared error code catalog.
 - Dedicated promotion downtime:
   - Mitigation: freeze protocol + strict validation + tested rollback.
+- ORM lock-in / inability to reuse foundation:
+  - Mitigation: strict repository interfaces, adapter isolation, and profile-based deployment modes.

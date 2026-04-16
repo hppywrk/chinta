@@ -161,10 +161,72 @@ Deployment target:
 - What is acceptable freeze duration during dedicated promotion?
 - Which modules launch in v1?
 
-## 13) Change Log
+## 13) Iterative Subsystem Development Strategy (MVP -> Stable)
+
+Complex subsystems (migration orchestration, dedicated promotion, billing) are delivered in maturity levels so the platform can ship a useful MVP early and harden over time.
+
+Delivery principles:
+
+- Keep one production path that works early, then add safety and automation in layers.
+- Make advanced orchestration optional behind feature flags until it is proven.
+- Prefer operator-assisted workflows first, then automate once behavior is understood.
+
+Migration subsystem maturity:
+
+- **M0 (MVP):**
+  - single-tenant and small-batch schema migrations
+  - explicit operator command execution
+  - basic migration ledger (`pending`, `running`, `succeeded`, `failed`)
+- **M1 (Operational):**
+  - batch execution across shared tenants
+  - resumable runs with retry policy and lock guards
+  - preflight checks and dry-run reports
+- **M2 (Extensible):**
+  - data migration hooks and script packaging conventions
+  - module-owned migration bundles validated by CI
+  - richer observability and failure diagnostics
+- **M3 (Stabilized):**
+  - progressive rollout (canary tenants first)
+  - automated rollback playbooks for failed releases
+  - SLO-backed migration orchestration
+
+Dedicated promotion maturity:
+
+- **P0 (MVP):** freeze-and-move via controlled maintenance workflow.
+- **P1:** automated orchestration job with validation suite and rollback command.
+- **P2:** reduced downtime with delta sync and stricter cutover SLAs.
+
+## 14) ORM/Data Access Layer as Reusable Architecture
+
+The ORM/data layer should be a separate architectural layer so the backbone services can be reused in simpler deployments.
+
+Layering model:
+
+- **Domain/Application Layer:** business use-cases and policies, no ORM imports.
+- **Repository Interfaces:** tenant-aware contracts owned by domain modules.
+- **Data Access Adapter Layer:** ORM implementation (SQLAlchemy or equivalent), query builders, mapping rules.
+- **Storage Infrastructure:** Postgres schemas, migrations, pooling, indexing.
+
+Design requirements:
+
+- Tenant context is injected by a `TenantContextProvider`, not manually threaded through every query.
+- Repositories receive a `UnitOfWork` abstraction so business code is ORM-agnostic.
+- Mapping definitions live in adapter packages; domain entities stay persistence-neutral.
+- Migration scripts target the adapter contract, not framework internals.
+
+Reusability profiles:
+
+- **Profile A (Full multi-tenant):** schema-per-tenant + migration runner + promotion support.
+- **Profile B (Simplified shared):** single schema + same domain services + minimal migration mode.
+- **Profile C (Single-tenant product):** reuse auth/gateway/module contracts with simplified repository adapters.
+
+This allows building a smaller MVP quickly while preserving the same control-plane and service contracts.
+
+## 15) Change Log
 
 - v1 (2026-04-03): Initial plan created from architecture discussion.
 - v1.1 (2026-04-03): Added concrete v1 artifacts:
   - `docs/CONTROL_PLANE_DDL_V1.sql`
   - `docs/API_CONTRACTS_V1.md`
   - `docs/IMPLEMENTATION_BACKLOG_V1.md`
+- v1.2 (2026-04-03): Added MVP-to-stable subsystem strategy and reusable ORM/data-layer architecture.
