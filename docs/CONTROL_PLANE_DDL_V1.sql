@@ -4,7 +4,7 @@
 --   - tenant registry, routing, memberships
 --   - entitlements and trials
 --   - billing primitives
---   - tenant schema migration tracking
+--   - tenant schema migration tracking and orchestration ledger
 --
 -- Notes:
 --   - Tenant runtime/module tables are intentionally excluded; they live in
@@ -125,10 +125,161 @@ CREATE TABLE IF NOT EXISTS platform.tenant_schema_versions (
     tenant_id UUID NOT NULL REFERENCES platform.tenants(id) ON DELETE CASCADE,
     module_code TEXT NOT NULL,
     schema_name TEXT NOT NULL,
-    migration_version TEXT NOT NULL,
-    migrated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    current_version BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (tenant_id, module_code)
 );
+
+CREATE INDEX IF NOT EXISTS tenant_schema_versions_module_idx
+    ON platform.tenant_schema_versions(module_code, current_version);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'migration_step_type') THEN
+        CREATE TYPE platform.migration_step_type AS ENUM ('SCHEMA', 'DATA', 'VERIFY');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'migration_scope_type') THEN
+        CREATE TYPE platform.migration_scope_type AS ENUM (
+            'CONTROL_PLANE',
+            'TENANT_BATCH',
+            'TENANT_SINGLE',
+            'DEDICATED_TARGET'
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'migration_run_status') THEN
+        CREATE TYPE platform.migration_run_status AS ENUM (
+            'PENDING',
+            'RUNNING',
+            'PAUSED',
+            'SUCCEEDED',
+            'FAILED',
+            'CANCELLED'
+        );
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'migration_item_status') THEN
+        CREATE TYPE platform.migration_item_status AS ENUM (
+            'PENDING',
+            'RUNNING',
+            'SUCCEEDED',
+            'FAILED',
+            'SKIPPED'
+        );
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS platform.migration_definitions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    module_code TEXT NOT NULL,
+    version BIGINT NOT NULL,
+    step_order INT NOT NULL,
+    step_type platform.migration_step_type NOT NULL,
+    step_name TEXT NOT NULL,
+    artifact_ref TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    is_idempotent BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_write_lock BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT migration_definitions_module_chk CHECK (module_code ~ '^[a-z][a-z0-9_]*$'),
+    CONSTRAINT migration_definitions_version_chk CHECK (version >= 1),
+    CONSTRAINT migration_definitions_step_order_chk CHECK (step_order >= 1),
+    UNIQUE (module_code, version, step_order)
+);
+
+CREATE INDEX IF NOT EXISTS migration_definitions_module_version_idx
+    ON platform.migration_definitions(module_code, version);
+
+CREATE TABLE IF NOT EXISTS platform.migration_runs (
+    run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    scope_type platform.migration_scope_type NOT NULL,
+    module_code TEXT,
+    requested_by TEXT NOT NULL,
+    status platform.migration_run_status NOT NULL DEFAULT 'PENDING',
+    options_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    CONSTRAINT migration_runs_module_chk CHECK (
+        (scope_type = 'CONTROL_PLANE' AND module_code IS NULL)
+        OR (scope_type <> 'CONTROL_PLANE' AND module_code IS NOT NULL)
+    ),
+    CONSTRAINT migration_runs_module_code_chk CHECK (
+        module_code IS NULL OR module_code ~ '^[a-z][a-z0-9_]*$'
+    ),
+    CONSTRAINT migration_runs_time_window_chk CHECK (
+        ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at
+    )
+);
+
+CREATE INDEX IF NOT EXISTS migration_runs_status_created_idx
+    ON platform.migration_runs(status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS migration_runs_scope_status_idx
+    ON platform.migration_runs(scope_type, status);
+
+CREATE TABLE IF NOT EXISTS platform.migration_run_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id UUID NOT NULL REFERENCES platform.migration_runs(run_id) ON DELETE CASCADE,
+    scope_type platform.migration_scope_type NOT NULL,
+    tenant_id UUID REFERENCES platform.tenants(id) ON DELETE CASCADE,
+    schema_name TEXT,
+    module_code TEXT,
+    target_version BIGINT,
+    status platform.migration_item_status NOT NULL DEFAULT 'PENDING',
+    attempt_count INT NOT NULL DEFAULT 0,
+    last_error_code TEXT,
+    last_error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT migration_run_items_scope_target_chk CHECK (
+        (scope_type = 'CONTROL_PLANE' AND tenant_id IS NULL AND schema_name IS NULL)
+        OR (scope_type <> 'CONTROL_PLANE' AND tenant_id IS NOT NULL AND schema_name IS NOT NULL)
+    ),
+    CONSTRAINT migration_run_items_scope_module_chk CHECK (
+        (scope_type = 'CONTROL_PLANE' AND module_code IS NULL)
+        OR (scope_type <> 'CONTROL_PLANE' AND module_code IS NOT NULL)
+    ),
+    CONSTRAINT migration_run_items_schema_chk CHECK (
+        schema_name IS NULL OR schema_name ~ '^t_[a-z0-9_]+$'
+    ),
+    CONSTRAINT migration_run_items_module_code_chk CHECK (
+        module_code IS NULL OR module_code ~ '^[a-z][a-z0-9_]*$'
+    ),
+    CONSTRAINT migration_run_items_target_version_chk CHECK (
+        target_version IS NULL OR target_version >= 1
+    ),
+    CONSTRAINT migration_run_items_attempt_chk CHECK (attempt_count >= 0),
+    CONSTRAINT migration_run_items_time_window_chk CHECK (
+        ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at
+    )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS migration_run_items_dedup_idx
+    ON platform.migration_run_items(
+        run_id,
+        COALESCE(tenant_id::TEXT, '__control__'),
+        COALESCE(module_code, '__control__'),
+        COALESCE(target_version, -1)
+    );
+
+CREATE INDEX IF NOT EXISTS migration_run_items_run_status_idx
+    ON platform.migration_run_items(run_id, status);
+
+CREATE INDEX IF NOT EXISTS migration_run_items_tenant_status_idx
+    ON platform.migration_run_items(tenant_id, status);
 
 -- ---------------------------------------------------------------------------
 -- entitlements
