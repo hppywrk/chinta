@@ -165,6 +165,8 @@ Definition of done:
 
 ## 5) Shared runtime schema provisioning and migration runner
 
+Reference specification: `docs/MIGRATION_SYSTEM_V1.md`
+
 ### B5.1 Provision tenant schema on onboarding
 Priority: P0  
 Dependencies: B1.1

@@ -173,6 +173,8 @@ Delivery principles:
 
 Migration subsystem maturity:
 
+Detailed specification: `docs/MIGRATION_SYSTEM_V1.md`
+
 - **M0 (MVP):**
   - single-tenant and small-batch schema migrations
   - explicit operator command execution
@@ -230,3 +232,4 @@ This allows building a smaller MVP quickly while preserving the same control-pla
   - `docs/API_CONTRACTS_V1.md`
   - `docs/IMPLEMENTATION_BACKLOG_V1.md`
 - v1.2 (2026-04-03): Added MVP-to-stable subsystem strategy and reusable ORM/data-layer architecture.
+- v1.3 (2026-04-03): Added `docs/MIGRATION_SYSTEM_V1.md` with migration runner architecture, SDK contract, release workflow, and recovery model.
