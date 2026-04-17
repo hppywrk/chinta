@@ -295,7 +295,22 @@ Behavior:
 - `VALIDATION_ERROR` -> 400
 - `INTERNAL_ERROR` -> 500
 
-## 7) Non-goals for v1
+## 7) Asynchronous event integration contract (v1)
+
+Reference specification: `docs/MESSAGING_ARCHITECTURE_V1.md`
+
+Guidelines:
+- HTTP APIs above are source-of-truth command endpoints.
+- Services emit async domain events after successful state changes.
+- Event publication is at-least-once; consumers must be idempotent.
+- For DB-backed producers, use outbox pattern for transactional consistency.
+
+Initial event set tied to these APIs:
+- tenant create/status/target activation endpoints emit `platform.*` events.
+- subscription/trial updates emit `entitlements.*` events.
+- usage ingest/invoice generation emit `billing.*` events.
+
+## 8) Non-goals for v1
 
 - Full OpenAPI generation in repo for every service.
 - Complex pricing model APIs (tiered volume/proration details).
