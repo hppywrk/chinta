@@ -52,3 +52,6 @@ curl http://localhost:8084/health  # gateway
 Interactive API docs (Swagger UI):
 - Auth: http://localhost:8083/docs
 - Gateway: http://localhost:8084/docs
+
+### Boundaries 
+- Всегда обновляй AGENTS.md при изменении структуры проекта
