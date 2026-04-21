@@ -4,7 +4,8 @@
 
 ### Project Overview
 
-Chinta is a personal thoughts/tasks management platform built as microservices. Only two services are currently fully implemented:
+Chinta is a multi tenant system with microservices infrastructure. the first simple application managed by chinta is a personal thoughts/tasks management service 
+Only two backbone services are currently fully implemented:
 
 - **chinta-auth** (port 8083) — FastAPI OIDC authentication service
 - **chinta-gateway** (port 8084) — FastAPI edge API gateway
