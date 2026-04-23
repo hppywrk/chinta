@@ -25,6 +25,7 @@ Services:
 - Tenant registry (tenant lifecycle and routing metadata)
 - Entitlements service (module access decisions)
 - Billing service (invoicing, payment status, usage ingestion)
+- Messaging backbone (NATS JetStream for async event flow)
 - Audit/observability services (logs, traces, metrics, audit events)
 
 ### 2.2 App Layer (Runtime Plane)
@@ -101,6 +102,17 @@ Migration workflow:
 - Policy-controlled service-to-service calls.
 - Full audit trail for authz-sensitive actions.
 
+### 7.1 Messaging broker decision and eventing model
+
+Detailed specification: `docs/MESSAGING_ARCHITECTURE_V1.md`
+
+- Preferred broker: **NATS JetStream** for MVP and early growth.
+- Async messaging is used for side effects, billing usage flow, audit fan-out, and workflow signals.
+- Critical user request path remains synchronous at gateway/auth/entitlements.
+- Delivery model is at-least-once with idempotent producers/consumers.
+- Postgres-backed services use an outbox pattern to avoid dual-write inconsistency.
+- DLQ and replay are mandatory for operational recovery.
+
 ## 8) Data and Migration Strategy
 
 - Single migration source per module.
@@ -129,7 +141,7 @@ CD:
 Deployment target:
 
 - Kubernetes preferred
-- managed Postgres + Redis + message broker
+- managed Postgres + Redis + **NATS JetStream**
 - centralized logging/metrics/traces
 
 ## 10) Initial Implementation Sequence (Repo-Oriented)
@@ -160,6 +172,7 @@ Deployment target:
 - Which billing provider is first (Stripe or custom adapter)?
 - What is acceptable freeze duration during dedicated promotion?
 - Which modules launch in v1?
+- At what scale do we introduce Kafka as an additional analytics/event-lake pipeline?
 
 ## 13) Iterative Subsystem Development Strategy (MVP -> Stable)
 
@@ -233,3 +246,4 @@ This allows building a smaller MVP quickly while preserving the same control-pla
   - `docs/IMPLEMENTATION_BACKLOG_V1.md`
 - v1.2 (2026-04-03): Added MVP-to-stable subsystem strategy and reusable ORM/data-layer architecture.
 - v1.3 (2026-04-03): Added `docs/MIGRATION_SYSTEM_V1.md` with migration runner architecture, SDK contract, release workflow, and recovery model.
+- v1.4 (2026-04-03): Added `docs/MESSAGING_ARCHITECTURE_V1.md` with broker decision (NATS JetStream), event contract, retries/DLQ, and rollout phases.

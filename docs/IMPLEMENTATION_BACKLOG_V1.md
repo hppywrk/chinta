@@ -55,6 +55,21 @@ Definition of done:
 - Profile matrix is documented and executable in local/dev environments.
 - CI runs at least one simplified profile smoke test.
 
+### B0.4 Introduce messaging backbone baseline (NATS JetStream)
+Priority: P0  
+Dependencies: none
+
+Reference specification: `docs/MESSAGING_ARCHITECTURE_V1.md`
+
+Tasks:
+- Provision NATS JetStream in local/dev and environment manifests.
+- Define initial streams/subjects for platform, billing, module, and audit events.
+- Define shared event envelope package and schema versioning conventions.
+
+Definition of done:
+- Platform services can publish/consume a test event end-to-end.
+- Streams and durable consumers are created reproducibly from code/config.
+
 ---
 
 ## 1) Tenant registry service
@@ -274,6 +289,19 @@ Tasks:
 Definition of done:
 - Deterministic invoice output for same source period data.
 
+### B7.3 Add billing outbox + async usage pipeline
+Priority: P1  
+Dependencies: B0.4, B7.1
+
+Tasks:
+- Implement Postgres outbox table and publisher worker for billing events.
+- Emit `billing.usage.recorded.v1` and `billing.invoice.generated.v1`.
+- Add idempotent consumer for aggregation path.
+
+Definition of done:
+- Duplicate deliveries do not alter final billed totals.
+- Failed deliveries are retried and eventually sent to DLQ after threshold.
+
 ---
 
 ## 8) CI/CD and observability
@@ -305,6 +333,19 @@ Tasks:
 Definition of done:
 - Green integration run proves end-to-end lifecycle.
 
+### B8.3 Messaging reliability and replay tooling
+Priority: P1  
+Dependencies: B0.4
+
+Tasks:
+- Add DLQ handling and replay command-line tooling.
+- Add metrics for publish failures, consumer lag, retry counts, and DLQ rate.
+- Add alerts for critical event flow degradation.
+
+Definition of done:
+- Operators can replay failed messages safely after fixes.
+- Dashboards show stream health per domain and consumer group.
+
 ---
 
 ## 9) Suggested first execution slice (smallest useful increment)
@@ -332,3 +373,5 @@ Outcome:
   - Mitigation: freeze protocol + strict validation + tested rollback.
 - ORM lock-in / inability to reuse foundation:
   - Mitigation: strict repository interfaces, adapter isolation, and profile-based deployment modes.
+- Message delivery duplication or backlog growth:
+  - Mitigation: outbox pattern, idempotent consumers, retry/DLQ policy, and lag alerts.
