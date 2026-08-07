@@ -2,93 +2,85 @@
 
 ## Cursor Cloud specific instructions
 
-### Project snapshot
+### Project Overview
 
-Chinta is a multi-tenant microservices project. In this repository state, only two services are operational:
+Chinta is a multi-tenant microservices platform. See `PLATFORM_PLAN.md` for the full architecture vision and `ROADMAP.md` for the iterative milestone plan.
 
-- **chinta-auth** (port 8083): FastAPI OIDC authentication service
-- **chinta-gateway** (port 8084): FastAPI edge gateway
+**M1 services (all implemented and working):**
 
-Everything else is partial, stubbed, or missing. Plan work around that limitation.
+| Service | Port | Description |
+|---|---|---|
+| `chinta-db` | 5432 | PostgreSQL 16 (Alpine) — notes, users, tags schema |
+| `chinta-auth` | 8083 | FastAPI OIDC authentication service |
+| `chinta-notebook` | 8085 | FastAPI note CRUD (create/list/get/delete with tags) |
+| `chinta-gateway` | 8084 | FastAPI edge proxy routing to auth + notebook |
 
-### Current repository layout (practical view)
+### Repository layout
 
-- `/chinta-auth`: working Python service
-- `/chinta-gateway`: working Python service
-- `/chinta`: C++ backend skeleton only (not production-ready)
-- `/chinta-db`: SQL bootstrap file (`init.sql`) only
-- `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
-- `/rootfs/etc/systemd`: template unit files with placeholder paths
-- `docker-compose.yml`: present, but not runnable as-is (see gotchas)
+- `/chinta-auth/` — working Python/FastAPI OIDC auth service
+- `/chinta-gateway/` — working Python/FastAPI edge gateway
+- `/chinta-notebook/` — working Python/FastAPI note CRUD service
+- `/chinta-db/` — PostgreSQL init SQL
+- `/tests/` — functional tests (pytest + httpx)
+- `/docs/` — v1 architecture specs (DDL, API contracts, migration system, messaging)
+- `PLATFORM_PLAN.md` — full multi-tenant platform architecture plan
+- `ROADMAP.md` — iterative milestone roadmap
+- `.github/workflows/ci.yml` — GitHub Actions CI (lint, test, build images)
 
-### Local environment bootstrap
+### Running the Stack
 
-Python services share `/workspace/.venv`. If it does not exist, create it first.
-
-```bash
-sudo apt-get install -y python3.12-venv
-python3.12 -m venv /workspace/.venv
-source /workspace/.venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r /workspace/chinta-auth/requirements.txt
-python -m pip install -r /workspace/chinta-gateway/requirements.txt
-```
-
-### Running services locally
-
-Activate venv before starting:
+All services are orchestrated via Docker Compose:
 
 ```bash
-source /workspace/.venv/bin/activate
+docker compose up -d --build
 ```
 
-Start auth service:
-
-```bash
-cd /workspace/chinta-auth
-OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test uvicorn app:app --host 0.0.0.0 --port 8083 --reload
-```
-
-Start gateway service (local auth URL, backend may be unavailable):
-
-```bash
-cd /workspace/chinta-gateway
-CHINTA_AUTH_URL=http://localhost:8083 CHINTA_BACKEND_URL=http://localhost:8080 CHINTA_GATEWAY_PORT=8084 uvicorn app:app --host 0.0.0.0 --port 8084 --reload
-```
-
-### Verification
-
-Health checks:
-
+Health check all services:
 ```bash
 curl http://localhost:8083/health  # auth
 curl http://localhost:8084/health  # gateway
+curl http://localhost:8085/health  # notebook
 ```
 
-Useful endpoint checks:
+### Running Without Docker
+
+Each Python service can run standalone with the shared virtualenv at `/workspace/.venv`:
 
 ```bash
-curl http://localhost:8083/openapi.json
-curl -i http://localhost:8084/me  # expected 401 without Bearer token
+source /workspace/.venv/bin/activate
+
+# Auth (needs dummy OIDC env vars to start):
+cd /workspace/chinta-auth && OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test uvicorn app:app --port 8083 --reload
+
+# Notebook (needs a running PostgreSQL):
+cd /workspace/chinta-notebook && DATABASE_URL=postgresql://chinta_user:chinta_password@localhost:5432/chinta uvicorn app:app --port 8085 --reload
+
+# Gateway:
+cd /workspace/chinta-gateway && CHINTA_AUTH_URL=http://localhost:8083 CHINTA_NOTEBOOK_URL=http://localhost:8085 uvicorn app:app --port 8084 --reload
 ```
 
-Swagger UI:
+### Linting
 
-- Auth: http://localhost:8083/docs
-- Gateway: http://localhost:8084/docs
+```bash
+ruff check .
+ruff check . --fix   # auto-fix
+```
 
-### Known blockers and gotchas
+### Testing
 
-- `docker-compose.yml` references services/directories that do not exist (`chinta-find`, `chinta-net`, `chinta-web`).
-- `docker-compose.yml` points DB build to `Dockerfile.postgres`, but repo file is `Dockerfile.cinta-db`.
-- `docker-compose.yml` defines `chinta-backend` with `context: ./chinta` and `dockerfile: Dockerfile`, but `/chinta/Dockerfile` is missing.
-- `Dockerfile.chinta` copies `lib/http-service`, but only `lib/http/include/...` exists.
-- `Dockerfile.chinta` runs `/usr/local/bin/chinta --config /etc/chinta/chinta.yaml`, while sample config file is `config/chinta.yml` (name mismatch).
-- `Dockerfile.cinta-db` copies `config/database/init.sql`, but this path is missing; available SQL is `chinta-db/init.sql`.
-- C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
-- Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
-- Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
-- No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
+Functional tests require running services (via `docker compose up` or manual startup):
+
+```bash
+pip install -r tests/requirements.txt
+pytest tests/ -v
+```
+
+### Key Gotchas
+
+- `python3.12-venv` must be installed before creating the virtualenv.
+- The auth service starts without real OIDC credentials, but OIDC flows (token exchange, userinfo) need valid `OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`.
+- The notebook service requires PostgreSQL to be running and the `DATABASE_URL` env var set.
+- FastAPI Swagger UI is available at `/docs` on each service for interactive API exploration.
 
 ### Boundaries
 

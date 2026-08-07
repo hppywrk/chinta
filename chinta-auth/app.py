@@ -2,6 +2,7 @@
 Chinta Auth — OpenID Connect authentication service using Authlib.
 Interface described in api/auth-openapi.yml.
 """
+import logging
 import os
 from pathlib import Path
 from urllib.parse import urljoin
@@ -9,13 +10,16 @@ from urllib.parse import urljoin
 import httpx
 import yaml
 from authlib.integrations.httpx_client import AsyncOAuth2Client
-from fastapi import FastAPI, HTTPException, Depends, Security
+from config import get_config
+from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from log import setup_logging
 from pydantic import BaseModel
 
-from config import get_config
+setup_logging()
+logger = logging.getLogger("chinta-auth")
 
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "auth-openapi.yml"

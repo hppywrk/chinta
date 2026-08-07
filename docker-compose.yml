@@ -1,131 +1,71 @@
-version: '3.8'
-
 services:
+
   chinta-db:
-    build:
-      context: .
-      dockerfile: Dockerfile.postgres
+    image: postgres:16-alpine
     container_name: chinta-db
     restart: unless-stopped
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./config/database:/docker-entrypoint-initdb.d
+      - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     environment:
-      - POSTGRES_DB=chinta
-      - POSTGRES_USER=chinta_user
-      - POSTGRES_PASSWORD=chinta_password
-    networks:
-      - chinta-network
-
-  chinta-backend:
-    build:
-      context: ./chinta
-      dockerfile: Dockerfile
-    container_name: chinta-backend
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      - chinta-db
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_DB_HOST=chinta-db
-      - CHINTA_DB_PORT=5432
-    networks:
-      - chinta-network
-
-  chinta-find:
-    build:
-      context: ./chinta-find
-      dockerfile: Dockerfile
-    container_name: chinta-find
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    depends_on:
-      - chinta-db
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_DB_HOST=chinta-db
-      - CHINTA_DB_PORT=5432
-    networks:
-      - chinta-network
-
-  chinta-net:
-    build:
-      context: ./chinta-net
-      dockerfile: Dockerfile
-    container_name: chinta-net
-    restart: unless-stopped
-    ports:
-      - "8082:8082"
-    depends_on:
-      - chinta-backend
-      - chinta-find
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_BACKEND_URL=http://chinta-backend:8080
-      - CHINTA_FIND_URL=http://chinta-find:8081
-    networks:
-      - chinta-network
-
-  chinta-web:
-    build:
-      context: ./chinta-web
-      dockerfile: Dockerfile
-    container_name: chinta-web
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    depends_on:
-      - chinta-net
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_NET_URL=http://chinta-net:8082
+      POSTGRES_DB: chinta
+      POSTGRES_USER: chinta_user
+      POSTGRES_PASSWORD: chinta_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chinta_user -d chinta"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - chinta-network
 
   chinta-auth:
     build:
       context: ./chinta-auth
-      dockerfile: Dockerfile
     container_name: chinta-auth
     restart: unless-stopped
     ports:
       - "8083:8083"
     environment:
-      - OIDC_ISSUER=${OIDC_ISSUER:-https://accounts.google.com}
-      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
-      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
-      - OIDC_REDIRECT_URI_BASE=${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-test}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-test}
+      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+    networks:
+      - chinta-network
+
+  chinta-notebook:
+    build:
+      context: ./chinta-notebook
+    container_name: chinta-notebook
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    depends_on:
+      chinta-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://chinta_user:chinta_password@chinta-db:5432/chinta
+      PORT: "8085"
     networks:
       - chinta-network
 
   chinta-gateway:
     build:
       context: ./chinta-gateway
-      dockerfile: Dockerfile
     container_name: chinta-gateway
     restart: unless-stopped
     ports:
       - "8084:8084"
     depends_on:
       - chinta-auth
-      - chinta-backend
-      - chinta-web
+      - chinta-notebook
     environment:
-      - CHINTA_AUTH_URL=http://chinta-auth:8083
-      - CHINTA_WEB_URL=http://chinta-web:8000
-      - CHINTA_MOBILE_URL=http://chinta-web:8000/m
-      - CHINTA_BACKEND_URL=http://chinta-backend:8080
-      - CHINTA_AUTH_CALLBACK_URL=http://localhost:8084/auth/callback
-      - CHINTA_GATEWAY_PORT=8084
+      CHINTA_AUTH_URL: http://chinta-auth:8083
+      CHINTA_NOTEBOOK_URL: http://chinta-notebook:8085
+      CHINTA_GATEWAY_PORT: "8084"
     networks:
       - chinta-network
 
