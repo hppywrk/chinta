@@ -13,7 +13,7 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 
 ### Current repository layout (practical view)
 
-- `/chinta-auth`: working Python service
+- `/chinta-auth`: working Python service (includes `test_callback.py`)
 - `/chinta-gateway`: working Python service
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
@@ -88,7 +88,8 @@ Swagger UI:
 - C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
-- No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
+- Auth has a small pytest suite (`chinta-auth/test_callback.py`); no README, CONTRIBUTING guide, or Makefile are currently present.
+- For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
 
 ### Boundaries
 
