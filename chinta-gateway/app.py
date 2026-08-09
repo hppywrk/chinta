@@ -3,7 +3,7 @@ from typing import Optional
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 
@@ -101,6 +101,23 @@ async def me(access_token: str = Depends(get_access_token)):
     return resp.json()
 
 
+_HOP_BY_HOP_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-encoding",
+    }
+)
+
+
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_api(
     path: str,
@@ -110,20 +127,23 @@ async def proxy_api(
     """
     Very simple example of gateway → backend proxy with auth.
 
-    - Validates the token via dependency.
-    - Forwards method, path, query and JSON body to backend.
+    - Requires a Bearer token via dependency.
+    - Forwards method, path, query and raw body to backend (no re-encoding).
     - Injects Authorization header so backend can trust user info later
       (or rely on gateway-only auth).
     """
     url = f"{BACKEND_URL}/{path}"
     method = request.method
     query = dict(request.query_params)
-    try:
-        body = await request.json()
-    except Exception:
-        body = None
+    # Forward the raw body. Re-serializing via json= changes Content-Length and
+    # crashes httpx/h11 when the client sent pretty-printed or spaced JSON.
+    body = await request.body() if method in ("POST", "PUT", "PATCH") else None
 
-    headers = dict(request.headers)
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
     headers["Authorization"] = f"Bearer {access_token}"
 
     async with httpx.AsyncClient() as client:
@@ -131,14 +151,21 @@ async def proxy_api(
             method,
             url,
             params=query,
-            json=body,
+            content=body,
             headers=headers,
             timeout=15.0,
         )
 
-    return JSONResponse(
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
+    return Response(
+        content=resp.content,
         status_code=resp.status_code,
-        content=resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
     )
 
 
