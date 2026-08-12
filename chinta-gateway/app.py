@@ -22,6 +22,25 @@ WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
 MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", "http://chinta-web:8000/m")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
 
+# Framing / hop-by-hop headers must not be blindly forwarded. httpx auto-decodes
+# Content-Encoding (e.g. gzip) but leaves the upstream Content-Length, which then
+# crashes Starlette/uvicorn with "Response content longer than Content-Length".
+_HOP_BY_HOP_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-encoding",
+    }
+)
+
 
 async def get_access_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -64,8 +83,9 @@ async def proxy_auth(request: Request, path: str):
     params = dict(request.query_params)
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     headers = {
-        k: v for k, v in request.headers.items()
-        if k.lower() not in ("host", "connection", "content-length")
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
     }
     async with httpx.AsyncClient() as client:
         resp = await client.request(
@@ -76,10 +96,16 @@ async def proxy_auth(request: Request, path: str):
             headers=headers,
             timeout=10.0,
         )
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
     return Response(
         content=resp.content,
         status_code=resp.status_code,
-        headers=dict(resp.headers),
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
     )
 
 

@@ -88,7 +88,7 @@ Swagger UI:
 - C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
-- No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
+- Gateway has a regression test for `/auth` proxy framing (`chinta-gateway/test_proxy_auth.py`); no README, CONTRIBUTING guide, or Makefile are currently present.
 
 ### Boundaries
 
