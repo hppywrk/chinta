@@ -171,9 +171,11 @@ async def userinfo(access_token: str = Depends(get_token_from_header)):
             status_code=501,
             detail={"error": "userinfo_unsupported", "error_description": "IdP has no userinfo endpoint"},
         )
-    token = {"access_token": access_token, "token_type": "Bearer"}
+    # Authlib's httpx AsyncOAuth2Client attaches the bearer via client.token;
+    # get() does not accept a token= kwarg (TypeError on every /userinfo call).
+    client.token = {"access_token": access_token, "token_type": "Bearer"}
     try:
-        resp = await client.get(client.userinfo_endpoint, token=token)
+        resp = await client.get(client.userinfo_endpoint)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
