@@ -3,7 +3,7 @@ from typing import Optional
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 
@@ -21,6 +21,24 @@ AUTH_BASE_URL = os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083")
 WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
 MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", "http://chinta-web:8000/m")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
+
+# Do not forward framing/hop-by-hop headers when rebuilding a buffered Response.
+# httpx may auto-decode Content-Encoding while leaving upstream Content-Length.
+_HOP_BY_HOP_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-encoding",
+    }
+)
 
 
 async def get_access_token(
@@ -136,9 +154,20 @@ async def proxy_api(
             timeout=15.0,
         )
 
-    return JSONResponse(
+    # Forward upstream bytes as-is. Re-parsing via resp.json()/JSONResponse:
+    # - crashes on empty application/json bodies (JSONDecodeError → 500)
+    # - corrupts non-JSON payloads (e.g. PDF) by JSON-encoding resp.text
+    # - mishandles Content-Type values that differ only by case
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
+    return Response(
+        content=resp.content,
         status_code=resp.status_code,
-        content=resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
     )
 
 
