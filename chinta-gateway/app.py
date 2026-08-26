@@ -61,7 +61,8 @@ async def proxy_auth(request: Request, path: str):
     """
     url = f"{AUTH_BASE_URL}/auth/{path}"
     method = request.method
-    params = dict(request.query_params)
+    # Preserve repeated keys (dict(query_params) keeps only the last value).
+    params = list(request.query_params.multi_items())
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     headers = {
         k: v for k, v in request.headers.items()
@@ -117,7 +118,9 @@ async def proxy_api(
     """
     url = f"{BACKEND_URL}/{path}"
     method = request.method
-    query = dict(request.query_params)
+    # Preserve repeated keys (dict(query_params) keeps only the last value),
+    # e.g. /api/items?id=1&id=2 or /api/search?tag=a&tag=b.
+    query = list(request.query_params.multi_items())
     try:
         body = await request.json()
     except Exception:
