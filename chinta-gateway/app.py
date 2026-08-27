@@ -96,9 +96,28 @@ async def me(access_token: str = Depends(get_access_token)):
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10.0,
         )
+    # Auth (or a proxy in front of it) may return HTML/empty bodies on failure.
+    # Unconditional resp.json() raises JSONDecodeError and turns those into opaque 500s.
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
-    return resp.json()
+        try:
+            detail = resp.json()
+        except ValueError:
+            detail = {
+                "error": "auth_upstream_error",
+                "error_description": resp.text
+                or f"Auth service returned HTTP {resp.status_code}",
+            }
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    try:
+        return resp.json()
+    except ValueError:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "invalid_userinfo_response",
+                "error_description": "Auth service returned non-JSON userinfo",
+            },
+        )
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])

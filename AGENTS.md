@@ -14,7 +14,7 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 ### Current repository layout (practical view)
 
 - `/chinta-auth`: working Python service
-- `/chinta-gateway`: working Python service
+- `/chinta-gateway`: working Python service (`test_me.py` regression tests)
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
