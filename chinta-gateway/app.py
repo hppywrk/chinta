@@ -32,6 +32,30 @@ async def get_access_token(
     return credentials.credentials
 
 
+async def require_valid_access_token(
+    access_token: str = Depends(get_access_token),
+) -> str:
+    """
+    Require a Bearer token that the auth service accepts.
+
+    Presence checks alone are not enough: /api used to forward any
+    non-empty Bearer string to the backend (auth bypass). Validate via
+    auth /userinfo before proxying.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{AUTH_BASE_URL}/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10.0,
+            )
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    return access_token
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -105,12 +129,12 @@ async def me(access_token: str = Depends(get_access_token)):
 async def proxy_api(
     path: str,
     request: Request,
-    access_token: str = Depends(get_access_token),
+    access_token: str = Depends(require_valid_access_token),
 ):
     """
     Very simple example of gateway → backend proxy with auth.
 
-    - Validates the token via dependency.
+    - Validates the token with the auth service before forwarding.
     - Forwards method, path, query and JSON body to backend.
     - Injects Authorization header so backend can trust user info later
       (or rely on gateway-only auth).
