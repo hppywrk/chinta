@@ -11,9 +11,15 @@ import yaml
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+# OAuth 2.0 (RFC 6749 §5.1) requires these on any response that contains tokens.
+_TOKEN_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
 
 from config import get_config
 
@@ -133,7 +139,7 @@ async def authenticate(body: AuthenticateRequest):
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/auth/callback")
@@ -159,7 +165,8 @@ async def auth_callback(
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    # Browser-facing GET: without no-store, caches/proxies may retain refresh tokens.
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/userinfo")
