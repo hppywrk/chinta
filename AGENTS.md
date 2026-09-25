@@ -18,6 +18,8 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
+- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, …)
+- `/scripts`: `validate_openapi_specs.py` for OpenAPI YAML sanity checks
 - `/rootfs/etc/systemd`: template unit files with placeholder paths
 - `docker-compose.yml`: present, but not runnable as-is (see gotchas)
 
@@ -68,8 +70,10 @@ curl http://localhost:8084/health  # gateway
 Useful endpoint checks:
 
 ```bash
-curl http://localhost:8083/openapi.json
+curl http://localhost:8083/openapi.yaml
+curl http://localhost:8084/openapi.yaml
 curl -i http://localhost:8084/me  # expected 401 without Bearer token
+python /workspace/scripts/validate_openapi_specs.py
 ```
 
 Swagger UI:
@@ -88,6 +92,7 @@ Swagger UI:
 - C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
+- Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
 
 ### Boundaries

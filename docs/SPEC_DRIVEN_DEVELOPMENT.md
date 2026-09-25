@@ -1,0 +1,157 @@
+# Spec-driven development (Chinta)
+
+Status: Adopted v1  
+Last updated: 2026-09-25
+
+This document is the practical guide for contract-first work in this repository: where specs live, how to change them, what is in **v1 scope**, and what stays on the backlog until control-plane services exist.
+
+---
+
+## 1) Principles
+
+1. **The spec is the public interface** for each operational Python service (`chinta-auth`, `chinta-gateway`). Change `api/*-openapi.yml` first, then implement.
+2. **Markdown + SQL specs** remain the source of truth for not-yet-built control-plane APIs (`docs/API_CONTRACTS_V1.md`, `docs/CONTROL_PLANE_DDL_V1.sql`, etc.). Promote sections to OpenAPI when a service is implemented—not before.
+3. **Manual alignment** between OpenAPI schemas and Pydantic models is acceptable in v1; CI only validates that specs are well-formed YAML and OpenAPI 3.0. Stricter linting (Spectral) and contract tests (schemathesis) are backlog items.
+4. **Undocumented behavior is not part of the contract.** Endpoints may exist in code for local convenience but are excluded from v1 OpenAPI until promoted (see gateway `/` redirect).
+
+---
+
+## 2) Repository layout
+
+```text
+chinta-auth/
+  api/auth-openapi.yml      # Auth service contract (v1)
+  app.py                    # Implements contract; serves /openapi.yaml
+
+chinta-gateway/
+  api/gateway-openapi.yml   # Gateway edge contract (v1)
+  app.py
+
+chinta/
+  api/chinta-openapi.yml    # Backend module API (draft; no runnable backend yet)
+
+docs/
+  API_CONTRACTS_V1.md       # Control-plane HTTP design (pre-OpenAPI)
+  SPEC_DRIVEN_DEVELOPMENT.md  # This file
+  IMPLEMENTATION_BACKLOG_V1.md
+
+scripts/
+  validate_openapi_specs.py # Local/CI: parse and sanity-check all *-openapi.yml
+```
+
+Naming: `{service}-openapi.yml` under `{service}/api/`.
+
+Served URLs (each operational service):
+
+| Service   | Spec file              | `GET /openapi.yaml` | `GET /openapi.json` |
+|-----------|------------------------|---------------------|---------------------|
+| Auth      | `auth-openapi.yml`     | yes                 | yes (YAML merged)   |
+| Gateway   | `gateway-openapi.yml`  | yes                 | yes (YAML merged)   |
+
+---
+
+## 3) Day-to-day workflow
+
+1. Edit the service `api/*-openapi.yml` (paths, schemas, error shapes).
+2. Update handlers and Pydantic models in `app.py` to match.
+3. Run validation:
+
+   ```bash
+   source /workspace/.venv/bin/activate
+   python /workspace/scripts/validate_openapi_specs.py
+   ```
+
+4. Smoke the served spec:
+
+   ```bash
+   curl -s http://localhost:8083/openapi.yaml | head
+   curl -s http://localhost:8084/openapi.yaml | head
+   ```
+
+5. When adding a **new** service, copy the OpenAPI serving block from `chinta-auth/app.py` and add an entry to `validate_openapi_specs.py`.
+
+---
+
+## 4) Gateway v1 scope (frozen)
+
+These routes are the **only** gateway behaviors guaranteed in v1. They match `chinta-gateway/api/gateway-openapi.yml`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness |
+| GET | `/me` | Return OIDC userinfo via auth service (Bearer JWT) |
+| * | `/auth/{path}` | Opaque passthrough to `CHINTA_AUTH_URL` (auth owns semantics) |
+| * | `/api/{path}` | Authenticated passthrough to `CHINTA_BACKEND_URL` |
+
+**Explicitly out of v1 contract** (implemented or planned elsewhere; do not rely on them without promoting the spec):
+
+| Item | Where tracked |
+|------|----------------|
+| `/` UI redirect (web/mobile heuristics) | Backlog **B_GW.2** |
+| Tenant resolution, entitlements, routing headers (`API_CONTRACTS_V1` §5) | Backlog **B2.x** |
+| Control-plane paths `/v1/tenants`, `/v1/entitlements/...` on gateway | Backlog **B1.x**, **B2.x** |
+| OpenAPI lint / schemathesis / codegen | Backlog **B0.5** |
+
+Passthrough routes are documented in OpenAPI with generic responses; exact status codes and bodies are defined by auth or backend services.
+
+---
+
+## 5) Auth v1 scope (reference)
+
+Canonical file: `chinta-auth/api/auth-openapi.yml`.
+
+| In v1 OpenAPI | Notes |
+|---------------|-------|
+| `POST /authenticate` | Code exchange |
+| `GET /auth/authorize` | Authorization URL helper |
+| `GET /userinfo` | Bearer userinfo |
+| `GET /health` | Liveness (added with spec-driven adoption) |
+
+**Backlog (auth spec gaps):**
+
+| Item | Backlog |
+|------|---------|
+| `GET /auth/callback` (browser redirect code exchange) | **B_AUTH.1** — add to OpenAPI or fold into documented proxy-only flow |
+| Automated spec ↔ FastAPI drift check | **B0.5** |
+
+---
+
+## 6) Control plane and backend (not v1 OpenAPI)
+
+| Artifact | Role | Next step |
+|----------|------|-----------|
+| `docs/API_CONTRACTS_V1.md` | Tenant registry, entitlements, routing | OpenAPI per service when B1/B2 land |
+| `chinta/api/chinta-openapi.yml` | Messages API for C++ backend | Wire when backend is runnable; until then treat as draft |
+| `docs/MESSAGING_ARCHITECTURE_V1.md` | Event envelope | AsyncAPI or JSON Schema in backlog **B0.4** |
+
+`API_CONTRACTS_V1.md` §8 still applies: full OpenAPI for every service is not a v1 platform goal—but **edge + auth** are fully OpenAPI-driven now.
+
+---
+
+## 7) CI recommendations (when GitHub Actions exists)
+
+Minimal job (no new runtime deps beyond PyYAML already in auth/gateway):
+
+```yaml
+- run: python scripts/validate_openapi_specs.py
+```
+
+Later (**B0.5**):
+
+- [Spectral](https://stoplight.io/open-source/spectral) ruleset for naming, operationIds, error schema consistency.
+- Optional `schemathesis run` against `/openapi.json` on a test instance with dummy OIDC env.
+- Optional diff gate: fail PR if `openapi.yaml` changes without `api/*-openapi.yml` change (or vice versa).
+
+---
+
+## 8) Related documents
+
+- Platform plan: `PLATFORM_PLAN.md`
+- Control-plane API design: `docs/API_CONTRACTS_V1.md`
+- Ordered delivery: `docs/IMPLEMENTATION_BACKLOG_V1.md` (sections **B0.5**, **B_GW.x**, **B_AUTH.1**)
+
+---
+
+## Change log
+
+- v1 (2026-09-25): Initial adoption guide; gateway OpenAPI v1; validation script; backlog entries for deferred gateway/auth/CI work.
