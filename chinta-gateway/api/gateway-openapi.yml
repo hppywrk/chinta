@@ -1,0 +1,258 @@
+openapi: 3.0.0
+info:
+  title: Chinta API Gateway
+  version: 1.0.0
+  description: |
+    Edge gateway v1 — health, authenticated user introspection, and opaque proxies
+    to auth and backend services. Tenant routing and entitlements are not part of v1;
+    see docs/SPEC_DRIVEN_DEVELOPMENT.md.
+
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      operationId: health
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /me:
+    get:
+      summary: Current user (via auth userinfo)
+      description: |
+        Validates Bearer JWT and returns OpenID Connect userinfo claims from the auth service.
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Userinfo claims
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+
+  /auth/{path}:
+    get:
+      summary: Passthrough to auth service (GET)
+      description: Forwards to `{CHINTA_AUTH_URL}/auth/{path}`. Response shape is owned by auth.
+      operationId: proxyAuthGet
+      parameters:
+        - $ref: '#/components/parameters/AuthProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+    post:
+      summary: Passthrough to auth service (POST)
+      operationId: proxyAuthPost
+      parameters:
+        - $ref: '#/components/parameters/AuthProxyPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+    put:
+      summary: Passthrough to auth service (PUT)
+      operationId: proxyAuthPut
+      parameters:
+        - $ref: '#/components/parameters/AuthProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+    patch:
+      summary: Passthrough to auth service (PATCH)
+      operationId: proxyAuthPatch
+      parameters:
+        - $ref: '#/components/parameters/AuthProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+    delete:
+      summary: Passthrough to auth service (DELETE)
+      operationId: proxyAuthDelete
+      parameters:
+        - $ref: '#/components/parameters/AuthProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+
+  /api/{path}:
+    get:
+      summary: Authenticated passthrough to backend (GET)
+      description: Forwards to `{CHINTA_BACKEND_URL}/{path}` with Authorization header set.
+      operationId: proxyApiGet
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApiProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+    post:
+      summary: Authenticated passthrough to backend (POST)
+      operationId: proxyApiPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApiProxyPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+    put:
+      summary: Authenticated passthrough to backend (PUT)
+      operationId: proxyApiPut
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApiProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+    patch:
+      summary: Authenticated passthrough to backend (PATCH)
+      operationId: proxyApiPatch
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApiProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+    delete:
+      summary: Authenticated passthrough to backend (DELETE)
+      operationId: proxyApiDelete
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ApiProxyPath'
+      responses:
+        default:
+          $ref: '#/components/responses/PassthroughResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AuthProxyPath:
+      name: path
+      in: path
+      required: true
+      description: Remainder of path after `/auth/` on the auth service
+      schema:
+        type: string
+    ApiProxyPath:
+      name: path
+      in: path
+      required: true
+      description: Remainder of path on the backend service
+      schema:
+        type: string
+
+  responses:
+    PassthroughResponse:
+      description: Body and status code defined by the upstream service
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+        text/plain:
+          schema:
+            type: string
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    GatewayError:
+      type: object
+      description: FastAPI-style error for gateway-owned routes (e.g. /me)
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+
+    UserInfo:
+      type: object
+      description: OpenID Connect userinfo claims (subset; same as auth service)
+      properties:
+        sub:
+          type: string
+        name:
+          type: string
+        preferred_username:
+          type: string
+        email:
+          type: string
+        email_verified:
+          type: boolean
+        given_name:
+          type: string
+        family_name:
+          type: string
+        picture:
+          type: string
+          format: uri

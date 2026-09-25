@@ -1,21 +1,28 @@
+"""
+Chinta API Gateway — edge proxy in front of auth and backend services.
+Interface described in api/gateway-openapi.yml.
+"""
 import os
+from pathlib import Path
 from typing import Optional
 
 import httpx
+import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+APP_DIR = Path(__file__).resolve().parent
+API_SPEC_PATH = APP_DIR / "api" / "gateway-openapi.yml"
 
 app = FastAPI(
     title="Chinta API Gateway",
-    version="0.1.0",
+    version="1.0.0",
     description="Edge gateway in front of internal Chinta services",
 )
 
-
 security = HTTPBearer(auto_error=False)
-
 
 AUTH_BASE_URL = os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083")
 WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
@@ -39,7 +46,10 @@ async def health():
 
 @app.get("/")
 async def root(request: Request):
-    """Redirect to desktop or mobile UI based on a simple hint."""
+    """
+    Convenience redirect to web/mobile UI (not part of gateway OpenAPI v1 contract).
+    See docs/SPEC_DRIVEN_DEVELOPMENT.md backlog B_GW.2.
+    """
     target = request.query_params.get("target")
     if target == "mobile":
         return RedirectResponse(MOBILE_UI_URL)
@@ -142,9 +152,33 @@ async def proxy_api(
     )
 
 
+# --- Serve OpenAPI spec from YAML ---
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_json():
+    """Serve OpenAPI schema. Built from api/gateway-openapi.yml with FastAPI overlay."""
+    with open(API_SPEC_PATH) as f:
+        spec = yaml.safe_load(f)
+    openapi_schema = get_openapi(
+        title=spec["info"]["title"],
+        version=spec["info"]["version"],
+        description=spec["info"].get("description", ""),
+        routes=app.routes,
+    )
+    openapi_schema["paths"] = spec.get("paths", openapi_schema["paths"])
+    openapi_schema["components"] = spec.get("components", openapi_schema.get("components", {}))
+    return openapi_schema
+
+
+@app.get("/openapi.yaml", include_in_schema=False, response_class=PlainTextResponse)
+async def openapi_yaml():
+    """Serve OpenAPI schema as YAML."""
+    with open(API_SPEC_PATH) as f:
+        return f.read()
+
+
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("CHINTA_GATEWAY_PORT", "8084"))
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
-

@@ -70,6 +70,58 @@ Definition of done:
 - Platform services can publish/consume a test event end-to-end.
 - Streams and durable consumers are created reproducibly from code/config.
 
+### B0.5 Spec-driven OpenAPI guardrails
+Priority: P1  
+Dependencies: none (baseline landed in repo)
+
+Reference: `docs/SPEC_DRIVEN_DEVELOPMENT.md`
+
+Tasks:
+- Run `scripts/validate_openapi_specs.py` in CI when GitHub Actions is added.
+- Add Spectral ruleset for naming, operationIds, shared error schemas.
+- Optional schemathesis smoke against auth/gateway `/openapi.json`.
+- Optional drift check between registered HTTP routes and YAML paths.
+
+Definition of done:
+- PRs cannot merge with invalid OpenAPI YAML.
+- Documented process for promoting `API_CONTRACTS_V1.md` sections to new `api/*-openapi.yml` files.
+
+### B_GW.1 Gateway tenant and entitlements enforcement
+Priority: P0  
+Dependencies: B1.1, B2.1
+
+Reference: `docs/API_CONTRACTS_V1.md` §5
+
+Tasks:
+- Resolve tenant context on `/api/*` (not v1 passthrough-only behavior).
+- Call entitlements service on gateway critical path.
+- Propagate `X-Tenant-Id`, `X-Request-Id`, and related headers to backend.
+
+Definition of done:
+- Gateway OpenAPI updated with any new first-class routes or documented middleware behavior.
+- Integration tests for denied vs allowed module access.
+
+### B_GW.2 Gateway UI root redirect (`GET /`)
+Priority: P2  
+Dependencies: chinta-web availability
+
+Tasks:
+- Decide whether `/` remains a convenience redirect or moves behind a static CDN.
+- If kept, add to `gateway-openapi.yml` or document as non-gateway concern.
+
+Definition of done:
+- Product decision recorded; spec and implementation aligned.
+
+### B_AUTH.1 Document auth callback in OpenAPI
+Priority: P2  
+Dependencies: none
+
+Tasks:
+- Add `GET /auth/callback` to `auth-openapi.yml` or explicitly defer to gateway auth proxy only.
+
+Definition of done:
+- Auth spec matches all auth-owned entry points used in production login flows.
+
 ---
 
 ## 1) Tenant registry service
