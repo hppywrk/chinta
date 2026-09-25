@@ -9,9 +9,9 @@ This document is the practical guide for contract-first work in this repository:
 
 ## 1) Principles
 
-1. **The spec is the public interface** for each operational Python service (`chinta-auth`, `chinta-gateway`). Change `api/*-openapi.yml` first, then implement.
+1. **The spec is the public interface** for each **HTTP service** in the repo (any language). Change that service’s `api/*-openapi.yml` first, then implement. Today auth and gateway are Python and already serve the spec; the C++ backend (`chinta/`) has a draft `chinta-openapi.yml` to implement against when the service is runnable; future control-plane services follow the same layout regardless of stack.
 2. **Markdown + SQL specs** remain the source of truth for not-yet-built control-plane APIs (`docs/API_CONTRACTS_V1.md`, `docs/CONTROL_PLANE_DDL_V1.sql`, etc.). Promote sections to OpenAPI when a service is implemented—not before.
-3. **Manual alignment** between OpenAPI schemas and Pydantic models is acceptable in v1; CI only validates that specs are well-formed YAML and OpenAPI 3.0. Stricter linting (Spectral) and contract tests (schemathesis) are backlog items.
+3. **Manual alignment** between OpenAPI and code is acceptable in v1 (e.g. Pydantic in Python, hand-written types in C++). CI only validates that specs are well-formed YAML and OpenAPI 3.0. Stricter linting (Spectral) and contract tests (schemathesis) are backlog items.
 4. **Undocumented behavior is not part of the contract.** Endpoints may exist in code for local convenience but are excluded from v1 OpenAPI until promoted (see gateway `/` redirect).
 
 ---
@@ -28,7 +28,7 @@ chinta-gateway/
   app.py
 
 chinta/
-  api/chinta-openapi.yml    # Backend module API (draft; no runnable backend yet)
+  api/chinta-openapi.yml    # Backend module API (draft; implement in C++ when runnable)
 
 docs/
   API_CONTRACTS_V1.md       # Control-plane HTTP design (pre-OpenAPI)
@@ -41,19 +41,22 @@ scripts/
 
 Naming: `{service}-openapi.yml` under `{service}/api/`.
 
-Served URLs (each operational service):
+Served URLs (operational services today; others when implemented):
 
-| Service   | Spec file              | `GET /openapi.yaml` | `GET /openapi.json` |
-|-----------|------------------------|---------------------|---------------------|
-| Auth      | `auth-openapi.yml`     | yes                 | yes (YAML merged)   |
-| Gateway   | `gateway-openapi.yml`  | yes                 | yes (YAML merged)   |
+| Service   | Language | Spec file              | `GET /openapi.yaml` | `GET /openapi.json` |
+|-----------|----------|------------------------|---------------------|---------------------|
+| Auth      | Python   | `auth-openapi.yml`     | yes                 | yes (YAML merged)   |
+| Gateway   | Python   | `gateway-openapi.yml`  | yes                 | yes (YAML merged)   |
+| Backend   | C++      | `chinta-openapi.yml`   | backlog             | backlog             |
+
+When the backend is operational, it should expose the same spec files (or equivalent static routes) so gateway and clients can discover the module API without reading source.
 
 ---
 
 ## 3) Day-to-day workflow
 
 1. Edit the service `api/*-openapi.yml` (paths, schemas, error shapes).
-2. Update handlers and Pydantic models in `app.py` to match.
+2. Update the service implementation to match (Python: handlers + Pydantic in `app.py`; C++: routes/handlers and DTOs under `chinta/`; other stacks: same idea).
 3. Run validation:
 
    ```bash
@@ -68,7 +71,7 @@ Served URLs (each operational service):
    curl -s http://localhost:8084/openapi.yaml | head
    ```
 
-5. When adding a **new** service, copy the OpenAPI serving block from `chinta-auth/app.py` and add an entry to `validate_openapi_specs.py`.
+5. When adding a **new HTTP service**, add `api/{service}-openapi.yml`, register it in `validate_openapi_specs.py`, and serve the spec at `/openapi.yaml` (Python services can reuse the pattern in `chinta-auth/app.py`; other languages serve the file statically or generate JSON from the same YAML).
 
 ---
 
@@ -112,7 +115,7 @@ Canonical file: `chinta-auth/api/auth-openapi.yml`.
 | Item | Backlog |
 |------|---------|
 | `GET /auth/callback` (browser redirect code exchange) | **B_AUTH.1** — add to OpenAPI or fold into documented proxy-only flow |
-| Automated spec ↔ FastAPI drift check | **B0.5** |
+| Automated spec ↔ implementation drift check | **B0.5** |
 
 ---
 
@@ -121,7 +124,7 @@ Canonical file: `chinta-auth/api/auth-openapi.yml`.
 | Artifact | Role | Next step |
 |----------|------|-----------|
 | `docs/API_CONTRACTS_V1.md` | Tenant registry, entitlements, routing | OpenAPI per service when B1/B2 land |
-| `chinta/api/chinta-openapi.yml` | Messages API for C++ backend | Wire when backend is runnable; until then treat as draft |
+| `chinta/api/chinta-openapi.yml` | Messages API for C++ backend | Implement routes to match spec; serve `/openapi.yaml` when service runs |
 | `docs/MESSAGING_ARCHITECTURE_V1.md` | Event envelope | AsyncAPI or JSON Schema in backlog **B0.4** |
 
 `API_CONTRACTS_V1.md` §8 still applies: full OpenAPI for every service is not a v1 platform goal—but **edge + auth** are fully OpenAPI-driven now.
@@ -155,3 +158,4 @@ Later (**B0.5**):
 ## Change log
 
 - v1 (2026-09-25): Initial adoption guide; gateway OpenAPI v1; validation script; backlog entries for deferred gateway/auth/CI work.
+- v1.1 (2026-09-25): Clarify contract-first applies to all HTTP services/languages, not Python only (PR #16 review).
