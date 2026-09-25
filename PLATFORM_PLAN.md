@@ -248,3 +248,4 @@ This allows building a smaller MVP quickly while preserving the same control-pla
 - v1.3 (2026-04-03): Added `docs/MIGRATION_SYSTEM_V1.md` with migration runner architecture, SDK contract, release workflow, and recovery model.
 - v1.4 (2026-04-03): Added `docs/MESSAGING_ARCHITECTURE_V1.md` with broker decision (NATS JetStream), event contract, retries/DLQ, and rollout phases.
 - v1.5 (2026-09-25): Added `docs/SPEC_DRIVEN_DEVELOPMENT.md`; gateway OpenAPI v1 aligned with auth pattern.
+- v1.6 (2026-09-25): Added GitHub Actions CI and VM CD (`docs/CI_CD.md`).

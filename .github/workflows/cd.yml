@@ -1,0 +1,46 @@
+name: CD
+
+# Deploy operational Python services to a VM over SSH.
+# Configure repository secrets before first run (see docs/CI_CD.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref to deploy (branch, tag, or SHA)
+        required: true
+        default: main
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy to VM
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check required secrets
+        run: |
+          test -n "${{ secrets.DEPLOY_HOST }}" || { echo "Missing secret DEPLOY_HOST"; exit 1; }
+          test -n "${{ secrets.DEPLOY_USER }}" || { echo "Missing secret DEPLOY_USER"; exit 1; }
+          test -n "${{ secrets.DEPLOY_SSH_KEY }}" || { echo "Missing secret DEPLOY_SSH_KEY"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Run remote deploy script
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            CHINTA_ROOT="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$CHINTA_ROOT" ]; then CHINTA_ROOT=/opt/chinta; fi
+            export CHINTA_ROOT
+            export GIT_REF="${{ inputs.git_ref }}"
+            bash "${CHINTA_ROOT}/scripts/deploy/vm-deploy.sh" "${GIT_REF}"

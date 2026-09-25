@@ -133,11 +133,13 @@ Canonical file: `chinta-auth/api/auth-openapi.yml`.
 
 ## 7) CI recommendations (when GitHub Actions exists)
 
-Minimal job (no new runtime deps beyond PyYAML already in auth/gateway):
+Implemented in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) (see `docs/CI_CD.md`):
 
 ```yaml
 - run: python scripts/validate_openapi_specs.py
 ```
+
+Plus Python compile/import checks and an auth/gateway smoke job.
 
 Later (**B0.5**):
 

@@ -18,7 +18,8 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
-- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, …)
+- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
+- `/.github/workflows`: `ci.yml` (PR checks), `cd.yml` (manual VM deploy)
 - `/scripts`: `validate_openapi_specs.py` for OpenAPI YAML sanity checks
 - `/rootfs/etc/systemd`: template unit files with placeholder paths
 - `docker-compose.yml`: present, but not runnable as-is (see gotchas)

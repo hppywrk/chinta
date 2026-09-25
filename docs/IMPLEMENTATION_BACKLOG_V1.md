@@ -74,10 +74,10 @@ Definition of done:
 Priority: P1  
 Dependencies: none (baseline landed in repo)
 
-Reference: `docs/SPEC_DRIVEN_DEVELOPMENT.md`
+Reference: `docs/SPEC_DRIVEN_DEVELOPMENT.md`, `docs/CI_CD.md`
 
 Tasks:
-- Run `scripts/validate_openapi_specs.py` in CI when GitHub Actions is added.
+- ~~Run `scripts/validate_openapi_specs.py` in CI when GitHub Actions is added.~~ (done: `.github/workflows/ci.yml`)
 - Add Spectral ruleset for naming, operationIds, shared error schemas.
 - Optional schemathesis smoke against auth/gateway `/openapi.json`.
 - Optional drift check between registered HTTP routes and YAML paths.
