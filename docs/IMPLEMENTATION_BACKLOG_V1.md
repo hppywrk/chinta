@@ -80,7 +80,7 @@ Tasks:
 - Run `scripts/validate_openapi_specs.py` in CI when GitHub Actions is added.
 - Add Spectral ruleset for naming, operationIds, shared error schemas.
 - Optional schemathesis smoke against auth/gateway `/openapi.json`.
-- Optional drift check between FastAPI routes and YAML paths.
+- Optional drift check between registered HTTP routes and YAML paths.
 
 Definition of done:
 - PRs cannot merge with invalid OpenAPI YAML.
