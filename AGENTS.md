@@ -14,7 +14,7 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 ### Current repository layout (practical view)
 
 - `/chinta-auth`: working Python service
-- `/chinta-gateway`: working Python service
+- `/chinta-gateway`: working Python service (`httpx` + `pyyaml` in requirements; `test_requirements.py`)
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
@@ -93,7 +93,8 @@ Swagger UI:
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
-- No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
+- Gateway has a small pytest check (`chinta-gateway/test_requirements.py`) that httpx stays in requirements; no README, CONTRIBUTING guide, or Makefile are currently present.
+- Do not replace `httpx` when adding deps to `chinta-gateway/requirements.txt` — proxies import it at module load.
 
 ### Boundaries
 
