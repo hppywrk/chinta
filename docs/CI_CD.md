@@ -1,7 +1,7 @@
 # CI/CD (GitHub Actions → VM)
 
 Status: v1  
-Last updated: 2026-09-25
+Last updated: 2026-09-27
 
 This document describes continuous integration on pull requests and manual deployment to a Linux VM.
 
@@ -38,12 +38,35 @@ Workflow: [`.github/workflows/cd.yml`](../.github/workflows/cd.yml)
 
 Triggered only via **Actions → CD → Run workflow** (`workflow_dispatch`). This avoids accidental deploys before secrets exist.
 
-Deploy script on the VM: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-deploy.sh)
+Deploy script: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-deploy.sh)
+
+The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM before running it, so deploy works even if the VM checkout is behind `main` or missing that file. The script then `git fetch` / `checkout` / `reset` to the same ref.
+
+### Service layout: `docker-compose.yml` + systemd
+
+[`docker-compose.yml`](../docker-compose.yml) is the **service catalog**: names, ports, env vars, networks, and dependencies for the whole platform.
+
+| Service | Default compose stack | VM runtime (production) |
+|---------|----------------------|-------------------------|
+| `chinta-auth` | yes | **systemd** (`chinta-auth.service`) — venv + uvicorn |
+| `chinta-gateway` | yes | **systemd** (`chinta-gateway.service`) — venv + uvicorn |
+| `chinta-db` | yes | optional **systemd** (`chinta-db.service`) — `docker compose up -d chinta-db` |
+| `chinta-backend`, `chinta-net` | `full-stack` profile only | not deployed in v1 |
+
+Extension block `x-chinta-systemd` in compose lists which services map to which runtime. `vm-deploy.sh` validates compose with `docker compose config` when Docker is installed.
+
+Local Docker dev:
+
+```bash
+export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
+docker compose up -d chinta-auth chinta-gateway chinta-db
+# Full platform (when images build): docker compose --profile full-stack up -d
+```
 
 ### 2.1 Prepare the VM (one time)
 
-1. **OS**: Ubuntu 22.04+ (or similar) with `git`, `python3.12-venv` (or `python3-venv`), `curl`.
-2. **User**: create a dedicated user, e.g. `chinta`, with sudo limited to `systemctl restart chinta-*` if desired.
+1. **OS**: Ubuntu 22.04+ (or similar) with `git`, `python3.12-venv` (or `python3-venv`), `curl`, and **Docker** + Compose plugin if you use `chinta-db` via compose.
+2. **User**: create a dedicated user, e.g. `chinta`, with sudo limited to `systemctl` and copying units if desired.
 3. **Clone** the repository:
 
    ```bash
@@ -61,11 +84,13 @@ Deploy script on the VM: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-de
    # edit OIDC_CLIENT_ID / OIDC_CLIENT_SECRET and URLs
    ```
 
-5. **Systemd units** (adjust paths if not using `/opt/chinta`):
+5. **Systemd units** (paths are rewritten to `CHINTA_ROOT` on each deploy; default `/opt/chinta`):
 
    ```bash
    sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-auth.service /etc/systemd/system/
    sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-gateway.service /etc/systemd/system/
+   # optional database:
+   # sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-db.service /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable chinta-auth chinta-gateway
    ```
@@ -102,7 +127,7 @@ On the VM, append the deploy public key to `~/.ssh/authorized_keys` for `DEPLOY_
 The deploy user must be able to:
 
 - `git fetch` / `checkout` in `DEPLOY_PATH`
-- run `scripts/deploy/vm-deploy.sh` (creates venv, pip install)
+- run `scripts/deploy/vm-deploy.sh` (creates venv, pip install, installs unit files)
 - `sudo systemctl restart chinta-auth chinta-gateway` (configure passwordless sudo for those units, or run units as the deploy user with user systemd — adjust units accordingly)
 
 ### 2.3 Run a deploy
@@ -125,7 +150,7 @@ The deploy user must be able to:
 | Auto-deploy on push to `main` | Add `push: branches: [main]` to CD with environment protection |
 | Spectral / schemathesis in CI | Backlog **B0.5** |
 | TLS + reverse proxy (Caddy/nginx) | Document in infra repo or extend this doc |
-| Docker-based deploy | Blocked until `docker-compose.yml` is runnable |
+| `full-stack` compose profile in CD | When C++ backend image builds reliably |
 | Staging environment | Second GitHub environment + `DEPLOY_*` secrets per env |
 
 ---

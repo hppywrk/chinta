@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN mkdir -p /docker-entrypoint-initdb.d
 
-COPY config/database/init.sql /docker-entrypoint-initdb.d/
+COPY chinta-db/init.sql /docker-entrypoint-initdb.d/init.sql
 
 RUN chown -R postgres:postgres /var/lib/postgresql
 RUN chmod 755 /docker-entrypoint-initdb.d/init.sql

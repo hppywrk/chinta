@@ -28,6 +28,17 @@ jobs:
         with:
           ref: ${{ inputs.git_ref }}
 
+      - name: Copy deploy script to VM
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          source: scripts/deploy/vm-deploy.sh
+          target: ${{ secrets.DEPLOY_PATH || '/opt/chinta' }}/scripts/deploy
+          overwrite: true
+
       - name: Run remote deploy script
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -43,4 +54,6 @@ jobs:
             if [ -z "$CHINTA_ROOT" ]; then CHINTA_ROOT=/opt/chinta; fi
             export CHINTA_ROOT
             export GIT_REF="${{ inputs.git_ref }}"
+            mkdir -p "${CHINTA_ROOT}/scripts/deploy"
+            chmod +x "${CHINTA_ROOT}/scripts/deploy/vm-deploy.sh"
             bash "${CHINTA_ROOT}/scripts/deploy/vm-deploy.sh" "${GIT_REF}"

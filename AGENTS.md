@@ -21,7 +21,7 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 - `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd`: template unit files with placeholder paths
-- `docker-compose.yml`: present, but not runnable as-is (see gotchas)
+- `docker-compose.yml`: service catalog (auth, gateway, db in default stack; backend/net under `full-stack` profile)
 
 ### Local environment bootstrap
 
@@ -89,12 +89,11 @@ The saved Cloud Agent environment installs both Python requirement files into `/
 
 ### Known blockers and gotchas
 
-- `docker-compose.yml` still references missing services/directories (`chinta-net`; backend build context is incomplete).
-- `docker-compose.yml` points DB build to `Dockerfile.postgres`, but repo file is `Dockerfile.cinta-db`.
-- `docker-compose.yml` defines `chinta-backend` with `context: ./chinta` and `dockerfile: Dockerfile`, but `/chinta/Dockerfile` is missing.
+- `docker compose --profile full-stack` still builds incomplete C++/net images (`Dockerfile.chinta`, `Dockerfile.chinta-net`).
+- VM CD uses **systemd** for auth/gateway (venv); compose describes the same service names/ports for Docker/local and optional `chinta-db.service`.
 - `Dockerfile.chinta` copies `lib/http-service`, but only `lib/http/include/...` exists.
 - `Dockerfile.chinta` runs `/usr/local/bin/chinta --config /etc/chinta/chinta.yaml`, while sample config file is `config/chinta.yml` (name mismatch).
-- `Dockerfile.cinta-db` copies `config/database/init.sql`, but this path is missing; available SQL is `chinta-db/init.sql`.
+- `Dockerfile.cinta-db` uses `chinta-db/init.sql`.
 - C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.

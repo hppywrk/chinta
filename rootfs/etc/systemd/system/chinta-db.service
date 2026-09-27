@@ -1,24 +1,17 @@
 [Unit]
-Description=Chinta Database Service
-After=network.target docker.service
+Description=Chinta PostgreSQL (docker compose service chinta-db)
+After=docker.service network-online.target
 Requires=docker.service
+Wants=network-online.target
 
 [Service]
-Type=simple
-ExecStartPre=-/usr/bin/docker stop chinta-db
-ExecStartPre=-/usr/bin/docker rm chinta-db
-ExecStart=/usr/bin/docker run --name chinta-db \
-    --network chinta-network \
-    -p 5432:5432 \
-    -v postgres_data:/var/lib/postgresql/data \
-    -v /path/to/your/config/database:/docker-entrypoint-initdb.d \
-    -e POSTGRES_DB=chinta \
-    -e POSTGRES_USER=chinta_user \
-    -e POSTGRES_PASSWORD=chinta_password \
-    chinta-db
-ExecStop=/usr/bin/docker stop chinta-db
-Restart=always
-RestartSec=10
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/chinta
+EnvironmentFile=-/etc/chinta/deploy.env
+ExecStart=/usr/bin/docker compose up -d chinta-db
+ExecStop=/usr/bin/docker compose stop chinta-db
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
