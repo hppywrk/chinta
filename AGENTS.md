@@ -13,7 +13,7 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 
 ### Current repository layout (practical view)
 
-- `/chinta-auth`: working Python service
+- `/chinta-auth`: working Python service (includes `test_callback.py`)
 - `/chinta-gateway`: working Python service
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
@@ -89,7 +89,7 @@ The saved Cloud Agent environment installs both Python requirement files into `/
 
 ### Known blockers and gotchas
 
-- `docker-compose.yml` references services/directories that do not exist (`chinta-find`, `chinta-net`, `chinta-web`).
+- `docker-compose.yml` still references missing services/directories (`chinta-net`; backend build context is incomplete).
 - `docker-compose.yml` points DB build to `Dockerfile.postgres`, but repo file is `Dockerfile.cinta-db`.
 - `docker-compose.yml` defines `chinta-backend` with `context: ./chinta` and `dockerfile: Dockerfile`, but `/chinta/Dockerfile` is missing.
 - `Dockerfile.chinta` copies `lib/http-service`, but only `lib/http/include/...` exists.
@@ -99,7 +99,8 @@ The saved Cloud Agent environment installs both Python requirement files into `/
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
-- No automated tests, README, CONTRIBUTING guide, or Makefile are currently present.
+- Auth and gateway include small pytest suites under each service directory; no README, CONTRIBUTING guide, or Makefile are currently present.
+- For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
 
 ### Boundaries
 

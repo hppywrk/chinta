@@ -54,6 +54,12 @@ class ErrorResponse(BaseModel):
 
 # --- OIDC discovery and client helpers ---
 
+def default_redirect_uri() -> str:
+    """Public OAuth callback URL. IdPs never echo redirect_uri back on callback."""
+    cfg = get_config()
+    return cfg["redirect_uri_base"].rstrip("/") + "/auth/callback"
+
+
 async def get_oidc_metadata() -> dict:
     """Fetch OIDC discovery document (.well-known/openid-configuration)."""
     global _oidc_metadata
@@ -73,7 +79,7 @@ async def get_oidc_client(redirect_uri: str | None = None) -> AsyncOAuth2Client:
     """Create Authlib OIDC client with endpoints from discovery."""
     cfg = get_config()
     metadata = await get_oidc_metadata()
-    redirect = redirect_uri or (cfg["redirect_uri_base"].rstrip("/") + "/callback")
+    redirect = redirect_uri or default_redirect_uri()
     client = AsyncOAuth2Client(
         client_id=cfg["client_id"],
         client_secret=cfg["client_secret"],
@@ -139,20 +145,24 @@ async def authenticate(body: AuthenticateRequest):
 @app.get("/auth/callback")
 async def auth_callback(
     code: str,
-    redirect_uri: str,
+    redirect_uri: str | None = None,
     state: str | None = None,
     nonce: str | None = None,
 ):
     """
     Same as POST /authenticate but for GET (e.g. browser redirect with code in query).
     Keeps OAuth code exchange entirely inside auth service; gateway can proxy blindly.
+
+    redirect_uri is optional: real IdPs only return code/state on the callback redirect.
+    When omitted, use the configured public callback URL (same value sent at authorize time).
     """
-    client = await get_oidc_client(redirect_uri=redirect_uri)
+    redirect = redirect_uri or default_redirect_uri()
+    client = await get_oidc_client(redirect_uri=redirect)
     try:
         token = await client.fetch_token(
             client.token_endpoint,
             code=code,
-            redirect_uri=redirect_uri,
+            redirect_uri=redirect,
         )
     except Exception as e:
         raise HTTPException(
