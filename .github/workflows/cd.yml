@@ -1,6 +1,6 @@
 name: CD
 
-# Deploy operational Python services to a VM over SSH.
+# Deploy docker compose stack to a VM over SSH.
 # Configure repository secrets before first run (see docs/CI_CD.md).
 
 on:
@@ -28,6 +28,17 @@ jobs:
         with:
           ref: ${{ inputs.git_ref }}
 
+      - name: Copy deploy script to VM
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          source: scripts/deploy/vm-deploy.sh
+          target: ${{ secrets.DEPLOY_PATH || '/opt/chinta' }}/scripts/deploy
+          overwrite: true
+
       - name: Run remote deploy script
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -36,11 +47,13 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           script_stop: true
-          command_timeout: 15m
+          command_timeout: 30m
           script: |
             set -euo pipefail
             CHINTA_ROOT="${{ secrets.DEPLOY_PATH }}"
             if [ -z "$CHINTA_ROOT" ]; then CHINTA_ROOT=/opt/chinta; fi
             export CHINTA_ROOT
             export GIT_REF="${{ inputs.git_ref }}"
+            mkdir -p "${CHINTA_ROOT}/scripts/deploy"
+            chmod +x "${CHINTA_ROOT}/scripts/deploy/vm-deploy.sh"
             bash "${CHINTA_ROOT}/scripts/deploy/vm-deploy.sh" "${GIT_REF}"

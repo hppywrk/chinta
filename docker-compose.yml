@@ -1,56 +1,30 @@
-version: '3.8'
+# Chinta service catalog — single source for local dev and VM CD (docker compose only).
+# Deploy: scripts/deploy/vm-deploy.sh or systemd chinta-compose.service
+
+name: chinta
+
+x-chinta-vm:
+  default_services:
+    - chinta-db
+    - chinta-auth
+    - chinta-gateway
 
 services:
   chinta-db:
     build:
       context: .
-      dockerfile: Dockerfile.postgres
+      dockerfile: Dockerfile.cinta-db
     container_name: chinta-db
     restart: unless-stopped
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./config/database:/docker-entrypoint-initdb.d
+      - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     environment:
-      - POSTGRES_DB=chinta
-      - POSTGRES_USER=chinta_user
-      - POSTGRES_PASSWORD=chinta_password
-    networks:
-      - chinta-network
-
-  chinta-backend:
-    build:
-      context: ./chinta
-      dockerfile: Dockerfile
-    container_name: chinta-backend
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    depends_on:
-      - chinta-db
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_DB_HOST=chinta-db
-      - CHINTA_DB_PORT=5432
-    networks:
-      - chinta-network
-
-  chinta-net:
-    build:
-      context: ./chinta-net
-      dockerfile: Dockerfile
-    container_name: chinta-net
-    restart: unless-stopped
-    ports:
-      - "8082:8082"
-    depends_on:
-      - chinta-backend
-    volumes:
-      - ./config:/etc/chinta:ro
-    environment:
-      - CHINTA_BACKEND_URL=http://chinta-backend:8080
+      POSTGRES_DB: chinta
+      POSTGRES_USER: chinta_user
+      POSTGRES_PASSWORD: chinta_password
     networks:
       - chinta-network
 
@@ -62,11 +36,14 @@ services:
     restart: unless-stopped
     ports:
       - "8083:8083"
+    env_file:
+      - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
+        required: false
     environment:
-      - OIDC_ISSUER=${OIDC_ISSUER:-https://accounts.google.com}
-      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
-      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
-      - OIDC_REDIRECT_URI_BASE=${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
     networks:
       - chinta-network
 
@@ -80,12 +57,51 @@ services:
       - "8084:8084"
     depends_on:
       - chinta-auth
-      - chinta-backend
+    env_file:
+      - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
+        required: false
     environment:
-      - CHINTA_AUTH_URL=http://chinta-auth:8083
-      - CHINTA_BACKEND_URL=http://chinta-backend:8080
-      - CHINTA_AUTH_CALLBACK_URL=http://localhost:8084/auth/callback
-      - CHINTA_GATEWAY_PORT=8084
+      CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
+      CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
+      CHINTA_AUTH_CALLBACK_URL: ${CHINTA_AUTH_CALLBACK_URL:-http://localhost:8084/auth/callback}
+      CHINTA_GATEWAY_PORT: "8084"
+    networks:
+      - chinta-network
+
+  chinta-backend:
+    profiles: ["full-stack"]
+    build:
+      context: .
+      dockerfile: Dockerfile.chinta
+    container_name: chinta-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - chinta-db
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      CHINTA_DB_HOST: chinta-db
+      CHINTA_DB_PORT: "5432"
+    networks:
+      - chinta-network
+
+  chinta-net:
+    profiles: ["full-stack"]
+    build:
+      context: .
+      dockerfile: Dockerfile.chinta-net
+    container_name: chinta-net
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    depends_on:
+      - chinta-backend
+    volumes:
+      - ./config:/etc/chinta:ro
+    environment:
+      CHINTA_BACKEND_URL: http://chinta-backend:8080
     networks:
       - chinta-network
 

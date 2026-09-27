@@ -1,18 +1,32 @@
 #!/usr/bin/env bash
-# Deploy chinta-auth and chinta-gateway on a Linux VM (systemd).
-# Invoked locally on the VM or remotely via GitHub Actions CD workflow.
+# Deploy Chinta on a Linux VM via docker compose (see docker-compose.yml).
 
 set -euo pipefail
 
 GIT_REF="${1:-main}"
 CHINTA_ROOT="${CHINTA_ROOT:-/opt/chinta}"
-VENV="${CHINTA_ROOT}/.venv"
 DEPLOY_ENV="${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}"
+COMPOSE_FILE="${CHINTA_ROOT}/docker-compose.yml"
+# Space-separated service names from the default stack (override in deploy.env).
+COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-chinta-db chinta-auth chinta-gateway}"
+SYSTEMD_UNIT="chinta-compose.service"
 
 log() { echo "[vm-deploy] $*"; }
 
+if [[ -f "${DEPLOY_ENV}" ]]; then
+  # shellcheck disable=SC1090
+  source "${DEPLOY_ENV}"
+fi
+
+export CHINTA_DEPLOY_ENV="${DEPLOY_ENV}"
+
 if [[ ! -d "${CHINTA_ROOT}/.git" ]]; then
   log "ERROR: ${CHINTA_ROOT} is not a git checkout"
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+  log "ERROR: docker and docker compose plugin are required for VM deploy"
   exit 1
 fi
 
@@ -22,44 +36,61 @@ git fetch origin "${GIT_REF}"
 git checkout "${GIT_REF}"
 git reset --hard "origin/${GIT_REF}" 2>/dev/null || git reset --hard "${GIT_REF}"
 
-if [[ ! -d "${VENV}" ]]; then
-  log "Creating venv at ${VENV}"
-  python3.12 -m venv "${VENV}" || python3 -m venv "${VENV}"
-fi
+compose() {
+  local env_args=()
+  if [[ -f "${DEPLOY_ENV}" ]]; then
+    env_args=(--env-file "${DEPLOY_ENV}")
+  fi
+  docker compose -f "${COMPOSE_FILE}" "${env_args[@]}" "$@"
+}
 
-# shellcheck disable=SC1091
-source "${VENV}/bin/activate"
-python -m pip install --upgrade pip
-pip install -r chinta-auth/requirements.txt -r chinta-gateway/requirements.txt
+log "Validating docker-compose.yml"
+OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-validate}" OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-validate}" \
+  compose config -q
 
-log "Validating OpenAPI specs"
-python scripts/validate_openapi_specs.py
+# Read shellcheck-friendly service list
+read -r -a services <<< "${COMPOSE_SERVICES}"
+
+log "Building images: ${COMPOSE_SERVICES}"
+compose build "${services[@]}"
+
+log "Starting stack: ${COMPOSE_SERVICES}"
+compose up -d "${services[@]}"
+
+install_systemd_unit() {
+  local unit="$1"
+  local src="${CHINTA_ROOT}/rootfs/etc/systemd/system/${unit}"
+  [[ -f "${src}" ]] || return 0
+  log "Installing ${unit} (CHINTA_ROOT=${CHINTA_ROOT})"
+  sed "s|/opt/chinta|${CHINTA_ROOT}|g" "${src}" | sudo tee "/etc/systemd/system/${unit}" >/dev/null
+}
 
 if command -v systemctl >/dev/null 2>&1; then
-  if systemctl list-unit-files | grep -q '^chinta-auth.service'; then
-    log "Restarting systemd units"
+  install_systemd_unit "${SYSTEMD_UNIT}"
+  if [[ -f "/etc/systemd/system/${SYSTEMD_UNIT}" ]]; then
     sudo systemctl daemon-reload
-    sudo systemctl restart chinta-auth.service chinta-gateway.service
-    sudo systemctl is-active --quiet chinta-auth.service
-    sudo systemctl is-active --quiet chinta-gateway.service
-  else
-    log "WARN: chinta-auth.service not installed — skip restart (see docs/CI_CD.md)"
+    sudo systemctl enable "${SYSTEMD_UNIT}"
+    sudo systemctl restart "${SYSTEMD_UNIT}" || true
   fi
-else
-  log "WARN: systemctl not found — skip service restart"
 fi
 
-if [[ -f "${DEPLOY_ENV}" ]]; then
-  # shellcheck disable=SC1090
-  source "${DEPLOY_ENV}"
-fi
+AUTH_PORT="${PORT:-8083}"
+GW_PORT="${CHINTA_GATEWAY_PORT:-8084}"
 
-if curl -sf http://127.0.0.1:8083/health >/dev/null 2>&1; then
-  log "Auth health OK"
-elif curl -sf http://127.0.0.1:${PORT:-8083}/health >/dev/null 2>&1; then
-  log "Auth health OK"
-else
-  log "WARN: auth health check failed (service may not be running yet)"
+for i in $(seq 1 30); do
+  if curl -sf "http://127.0.0.1:${AUTH_PORT}/health" >/dev/null 2>&1 \
+    && curl -sf "http://127.0.0.1:${GW_PORT}/health" >/dev/null 2>&1; then
+    log "Auth and gateway health OK"
+    break
+  fi
+  sleep 2
+done
+
+if ! curl -sf "http://127.0.0.1:${AUTH_PORT}/health" >/dev/null 2>&1; then
+  log "WARN: auth health check failed on port ${AUTH_PORT}"
+fi
+if ! curl -sf "http://127.0.0.1:${GW_PORT}/health" >/dev/null 2>&1; then
+  log "WARN: gateway health check failed on port ${GW_PORT}"
 fi
 
 log "Deploy finished for ref ${GIT_REF}"

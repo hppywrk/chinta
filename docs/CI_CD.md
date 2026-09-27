@@ -1,7 +1,7 @@
 # CI/CD (GitHub Actions → VM)
 
 Status: v1  
-Last updated: 2026-09-25
+Last updated: 2026-09-27
 
 This document describes continuous integration on pull requests and manual deployment to a Linux VM.
 
@@ -38,12 +38,29 @@ Workflow: [`.github/workflows/cd.yml`](../.github/workflows/cd.yml)
 
 Triggered only via **Actions → CD → Run workflow** (`workflow_dispatch`). This avoids accidental deploys before secrets exist.
 
-Deploy script on the VM: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-deploy.sh)
+Deploy script: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-deploy.sh)
+
+The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM before running it. The script then `git fetch` / `checkout` / `reset` to the same ref and runs **`docker compose build` + `up -d`**.
+
+### Service layout: Docker Compose only
+
+[`docker-compose.yml`](../docker-compose.yml) defines **all** runtime services on the VM. There is no host venv or per-service uvicorn under systemd.
+
+| Service | Default CD stack | Notes |
+|---------|------------------|--------|
+| `chinta-db` | yes | Postgres image from `Dockerfile.cinta-db` |
+| `chinta-auth` | yes | Built from `chinta-auth/Dockerfile` |
+| `chinta-gateway` | yes | Built from `chinta-gateway/Dockerfile` |
+| `chinta-backend`, `chinta-net` | `full-stack` profile only | Not deployed in v1 |
+
+Default service list is in `x-chinta-vm.default_services` and overridable via `CHINTA_COMPOSE_SERVICES` in `/etc/chinta/deploy.env`.
+
+**Boot after reboot:** optional [`chinta-compose.service`](../rootfs/etc/systemd/system/chinta-compose.service) runs the same `docker compose up -d` stack (one systemd unit, all processes in containers).
 
 ### 2.1 Prepare the VM (one time)
 
-1. **OS**: Ubuntu 22.04+ (or similar) with `git`, `python3.12-venv` (or `python3-venv`), `curl`.
-2. **User**: create a dedicated user, e.g. `chinta`, with sudo limited to `systemctl restart chinta-*` if desired.
+1. **OS**: Ubuntu 22.04+ with `git`, `curl`, **Docker Engine** and the **Compose plugin** (`docker compose version`).
+2. **User**: e.g. `chinta` in the `docker` group (`sudo usermod -aG docker chinta`) and passwordless `sudo` for `systemctl` if you enable `chinta-compose.service`.
 3. **Clone** the repository:
 
    ```bash
@@ -52,32 +69,37 @@ Deploy script on the VM: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-de
    sudo -u chinta git clone https://github.com/hppywrk/chinta.git /opt/chinta
    ```
 
-4. **Environment file**:
+4. **Environment file** (passed to compose via `--env-file` and container `env_file`):
 
    ```bash
    sudo mkdir -p /etc/chinta
    sudo cp /opt/chinta/config/deploy.env.example /etc/chinta/deploy.env
    sudo chmod 600 /etc/chinta/deploy.env
-   # edit OIDC_CLIENT_ID / OIDC_CLIENT_SECRET and URLs
+   # Set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, public OIDC_REDIRECT_URI_BASE / CHINTA_AUTH_CALLBACK_URL
    ```
 
-5. **Systemd units** (adjust paths if not using `/opt/chinta`):
+5. **Optional — start stack on boot:**
 
    ```bash
-   sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-auth.service /etc/systemd/system/
-   sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-gateway.service /etc/systemd/system/
+   sudo cp /opt/chinta/rootfs/etc/systemd/system/chinta-compose.service /etc/systemd/system/
    sudo systemctl daemon-reload
-   sudo systemctl enable chinta-auth chinta-gateway
+   sudo systemctl enable chinta-compose
    ```
 
-6. **First deploy** (on VM):
+6. **First deploy**:
 
    ```bash
    cd /opt/chinta && bash scripts/deploy/vm-deploy.sh main
-   sudo systemctl start chinta-auth chinta-gateway
    ```
 
-7. **Firewall**: expose **8083** (auth) and **8084** (gateway) only as needed; prefer TLS termination on a reverse proxy in front.
+7. **Firewall**: expose **8083** (auth) and **8084** (gateway) as needed; prefer TLS on a reverse proxy.
+
+Local Docker (same compose file):
+
+```bash
+export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
+docker compose up -d chinta-db chinta-auth chinta-gateway
+```
 
 ### 2.2 GitHub configuration
 
@@ -93,25 +115,25 @@ Deploy script on the VM: [`scripts/deploy/vm-deploy.sh`](../scripts/deploy/vm-de
 
 #### Environment (recommended)
 
-Create a GitHub **environment** named `production` with optional protection rules (required reviewers). The CD workflow uses `environment: production`.
+Create a GitHub **environment** named `production` with optional protection rules. The CD workflow uses `environment: production`.
 
 #### SSH access for Actions
-
-On the VM, append the deploy public key to `~/.ssh/authorized_keys` for `DEPLOY_USER`.
 
 The deploy user must be able to:
 
 - `git fetch` / `checkout` in `DEPLOY_PATH`
-- run `scripts/deploy/vm-deploy.sh` (creates venv, pip install)
-- `sudo systemctl restart chinta-auth chinta-gateway` (configure passwordless sudo for those units, or run units as the deploy user with user systemd — adjust units accordingly)
+- run `docker compose` (group `docker` or root)
+- run `scripts/deploy/vm-deploy.sh`
+- optional: `sudo systemctl` for `chinta-compose.service`
 
 ### 2.3 Run a deploy
 
-1. Merge or select the git ref you want (e.g. `main` or a release tag).
+1. Select the git ref (e.g. `main`).
 2. GitHub → **Actions** → **CD** → **Run workflow** → set **git_ref**.
-3. Watch the job log; on success, verify on the VM:
+3. Verify on the VM:
 
    ```bash
+   docker compose ps
    curl -s http://127.0.0.1:8083/health
    curl -s http://127.0.0.1:8084/health
    ```
@@ -122,11 +144,11 @@ The deploy user must be able to:
 
 | Item | Notes |
 |------|--------|
-| Auto-deploy on push to `main` | Add `push: branches: [main]` to CD with environment protection |
+| Auto-deploy on push to `main` | Add `push: branches: [main]` with environment protection |
 | Spectral / schemathesis in CI | Backlog **B0.5** |
-| TLS + reverse proxy (Caddy/nginx) | Document in infra repo or extend this doc |
-| Docker-based deploy | Blocked until `docker-compose.yml` is runnable |
-| Staging environment | Second GitHub environment + `DEPLOY_*` secrets per env |
+| TLS + reverse proxy (Caddy/nginx) | Infra doc or extend this file |
+| `full-stack` profile in CD | When backend/net images build reliably |
+| Staging environment | Second GitHub environment + secrets |
 
 ---
 
