@@ -11,9 +11,15 @@ import yaml
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+# OAuth 2.0 (RFC 6749 §5.1) requires these on any response that contains tokens.
+_TOKEN_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
 
 from config import get_config
 
@@ -139,7 +145,7 @@ async def authenticate(body: AuthenticateRequest):
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/auth/callback")
@@ -169,7 +175,7 @@ async def auth_callback(
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/userinfo")
@@ -181,9 +187,11 @@ async def userinfo(access_token: str = Depends(get_token_from_header)):
             status_code=501,
             detail={"error": "userinfo_unsupported", "error_description": "IdP has no userinfo endpoint"},
         )
-    token = {"access_token": access_token, "token_type": "Bearer"}
+    # Authlib's httpx AsyncOAuth2Client attaches the bearer via client.token;
+    # get() does not accept a token= kwarg (TypeError on every /userinfo call).
+    client.token = {"access_token": access_token, "token_type": "Bearer"}
     try:
-        resp = await client.get(client.userinfo_endpoint, token=token)
+        resp = await client.get(client.userinfo_endpoint)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:

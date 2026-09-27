@@ -1,0 +1,17 @@
+[Unit]
+Description=Chinta API Gateway
+After=network-online.target chinta-auth.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chinta
+Group=chinta
+WorkingDirectory=/opt/chinta/chinta-gateway
+EnvironmentFile=-/etc/chinta/deploy.env
+ExecStart=/opt/chinta/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8084
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

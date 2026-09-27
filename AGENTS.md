@@ -13,13 +13,13 @@ Everything else is partial, stubbed, or missing. Plan work around that limitatio
 
 ### Current repository layout (practical view)
 
-- `/chinta-auth`: working Python service (includes `test_callback.py`)
-- `/chinta-gateway`: working Python service
+- `/chinta-auth`: working Python service (pytest under `chinta-auth/test_*.py`)
+- `/chinta-gateway`: working Python service (`httpx` + `pyyaml` in requirements; pytest under `chinta-gateway/test_*.py`)
 - `/chinta`: C++ backend skeleton only (not production-ready)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) only
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
-- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, …)
-- `/scripts`: `validate_openapi_specs.py` for OpenAPI YAML sanity checks
+- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
+- `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd`: template unit files with placeholder paths
 - `docker-compose.yml`: present, but not runnable as-is (see gotchas)
 
@@ -85,7 +85,7 @@ Swagger UI:
 
 The saved Cloud Agent environment installs both Python requirement files into `/workspace/.venv` and, on each boot, starts chinta-auth (`0.0.0.0:8083`) and chinta-gateway (`0.0.0.0:8084`) with `OIDC_CLIENT_ID=test` and `OIDC_CLIENT_SECRET=test`. If `GET /health` on those ports already returns `{"status":"ok"}`, leave the existing processes running.
 
-`chinta-gateway/app.py` imports `httpx`, which is declared only in `chinta-auth/requirements.txt`. Install both requirement files into the shared venv.
+`chinta-gateway/requirements.txt` declares `httpx` (required by `app.py`). Install both Python requirement files into the shared venv.
 
 ### Known blockers and gotchas
 
@@ -99,7 +99,9 @@ The saved Cloud Agent environment installs both Python requirement files into `/
 - Systemd unit files under `rootfs/etc/systemd` contain placeholder paths like `/path/to/your/...` and are not directly deployable.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
-- Auth and gateway include small pytest suites under each service directory; no README, CONTRIBUTING guide, or Makefile are currently present.
+- Auth and gateway include pytest suites under each service directory; run with `pip install pytest` then `pytest` from the service directory. No README, CONTRIBUTING guide, or Makefile are currently present.
+- Do not drop `httpx` from `chinta-gateway/requirements.txt` — proxy routes import it at module load.
+- GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
 - For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
 
 ### Boundaries
