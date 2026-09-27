@@ -1,18 +1,13 @@
-# Chinta service catalog — ports, images, env, and dependencies.
-# VM production (docs/CI_CD.md): Python edge services run under systemd; optional
-# data plane services use systemd units that call `docker compose` for the same
-# service names defined here. Local dev: `docker compose up` (auth + gateway + db).
+# Chinta service catalog — single source for local dev and VM CD (docker compose only).
+# Deploy: scripts/deploy/vm-deploy.sh or systemd chinta-compose.service
 
 name: chinta
 
-x-chinta-systemd:
-  # Native venv + uvicorn on the VM (see rootfs/etc/systemd/system/)
-  native:
+x-chinta-vm:
+  default_services:
+    - chinta-db
     - chinta-auth
     - chinta-gateway
-  # Managed via docker compose from systemd (see chinta-db.service)
-  compose:
-    - chinta-db
 
 services:
   chinta-db:
@@ -41,6 +36,9 @@ services:
     restart: unless-stopped
     ports:
       - "8083:8083"
+    env_file:
+      - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
+        required: false
     environment:
       OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
@@ -59,6 +57,9 @@ services:
       - "8084:8084"
     depends_on:
       - chinta-auth
+    env_file:
+      - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
+        required: false
     environment:
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}

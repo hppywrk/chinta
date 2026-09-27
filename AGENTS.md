@@ -90,7 +90,7 @@ The saved Cloud Agent environment installs both Python requirement files into `/
 ### Known blockers and gotchas
 
 - `docker compose --profile full-stack` still builds incomplete C++/net images (`Dockerfile.chinta`, `Dockerfile.chinta-net`).
-- VM CD uses **systemd** for auth/gateway (venv); compose describes the same service names/ports for Docker/local and optional `chinta-db.service`.
+- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-gateway`) via `scripts/deploy/vm-deploy.sh`; optional `chinta-compose.service` starts the same stack on boot.
 - `Dockerfile.chinta` copies `lib/http-service`, but only `lib/http/include/...` exists.
 - `Dockerfile.chinta` runs `/usr/local/bin/chinta --config /etc/chinta/chinta.yaml`, while sample config file is `config/chinta.yml` (name mismatch).
 - `Dockerfile.cinta-db` uses `chinta-db/init.sql`.

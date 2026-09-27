@@ -1,6 +1,6 @@
 name: CD
 
-# Deploy operational Python services to a VM over SSH.
+# Deploy docker compose stack to a VM over SSH.
 # Configure repository secrets before first run (see docs/CI_CD.md).
 
 on:
@@ -47,7 +47,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           script_stop: true
-          command_timeout: 15m
+          command_timeout: 30m
           script: |
             set -euo pipefail
             CHINTA_ROOT="${{ secrets.DEPLOY_PATH }}"
