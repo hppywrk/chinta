@@ -10,7 +10,6 @@ COMPOSE_FILE="${CHINTA_ROOT}/docker-compose.yml"
 # Space-separated service names from the default stack (override in deploy.env).
 COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-chinta-db chinta-auth chinta-gateway}"
 SYSTEMD_UNIT="chinta-compose.service"
-LEGACY_UNITS=(chinta-auth.service chinta-gateway.service chinta-db.service)
 
 log() { echo "[vm-deploy] $*"; }
 
@@ -67,13 +66,6 @@ install_systemd_unit() {
 }
 
 if command -v systemctl >/dev/null 2>&1; then
-  for unit in "${LEGACY_UNITS[@]}"; do
-    if systemctl is-active --quiet "${unit}" 2>/dev/null; then
-      log "Stopping legacy unit ${unit} (replaced by Docker)"
-      sudo systemctl stop "${unit}" || true
-      sudo systemctl disable "${unit}" || true
-    fi
-  done
   install_systemd_unit "${SYSTEMD_UNIT}"
   if [[ -f "/etc/systemd/system/${SYSTEMD_UNIT}" ]]; then
     sudo systemctl daemon-reload

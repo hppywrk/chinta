@@ -57,8 +57,6 @@ Default service list is in `x-chinta-vm.default_services` and overridable via `C
 
 **Boot after reboot:** optional [`chinta-compose.service`](../rootfs/etc/systemd/system/chinta-compose.service) runs the same `docker compose up -d` stack (one systemd unit, all processes in containers).
 
-Legacy units `chinta-auth.service` / `chinta-gateway.service` (host uvicorn) are stopped and disabled on deploy if present.
-
 ### 2.1 Prepare the VM (one time)
 
 1. **OS**: Ubuntu 22.04+ with `git`, `curl`, **Docker Engine** and the **Compose plugin** (`docker compose version`).
