@@ -81,6 +81,12 @@ Swagger UI:
 - Auth: http://localhost:8083/docs
 - Gateway: http://localhost:8084/docs
 
+### Cloud Agent
+
+The saved Cloud Agent environment installs both Python requirement files into `/workspace/.venv` and, on each boot, starts chinta-auth (`0.0.0.0:8083`) and chinta-gateway (`0.0.0.0:8084`) with `OIDC_CLIENT_ID=test` and `OIDC_CLIENT_SECRET=test`. If `GET /health` on those ports already returns `{"status":"ok"}`, leave the existing processes running.
+
+`chinta-gateway/app.py` imports `httpx`, which is declared only in `chinta-auth/requirements.txt`. Install both requirement files into the shared venv.
+
 ### Known blockers and gotchas
 
 - `docker-compose.yml` references services/directories that do not exist (`chinta-find`, `chinta-net`, `chinta-web`).
