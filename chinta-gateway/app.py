@@ -10,7 +10,7 @@ import httpx
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 APP_DIR = Path(__file__).resolve().parent
@@ -29,6 +29,25 @@ WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
 MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", "http://chinta-web:8000/m")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
 
+# Framing / hop-by-hop headers must not be blindly forwarded. httpx auto-decodes
+# Content-Encoding (e.g. gzip) but leaves the upstream Content-Length, which then
+# crashes Starlette/uvicorn with "Response content longer than Content-Length".
+_HOP_BY_HOP_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-encoding",
+    }
+)
+
 
 async def get_access_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -37,6 +56,30 @@ async def get_access_token(
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     return credentials.credentials
+
+
+async def require_valid_access_token(
+    access_token: str = Depends(get_access_token),
+) -> str:
+    """
+    Require a Bearer token that the auth service accepts.
+
+    Presence checks alone are not enough: /api used to forward any
+    non-empty Bearer string to the backend (auth bypass). Validate via
+    auth /userinfo before proxying.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{AUTH_BASE_URL}/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10.0,
+            )
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    return access_token
 
 
 @app.get("/health")
@@ -71,11 +114,13 @@ async def proxy_auth(request: Request, path: str):
     """
     url = f"{AUTH_BASE_URL}/auth/{path}"
     method = request.method
-    params = dict(request.query_params)
+    # Preserve repeated keys (dict(query_params) keeps only the last value).
+    params = list(request.query_params.multi_items())
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     headers = {
-        k: v for k, v in request.headers.items()
-        if k.lower() not in ("host", "connection", "content-length")
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
     }
     async with httpx.AsyncClient() as client:
         resp = await client.request(
@@ -86,10 +131,16 @@ async def proxy_auth(request: Request, path: str):
             headers=headers,
             timeout=10.0,
         )
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
     return Response(
         content=resp.content,
         status_code=resp.status_code,
-        headers=dict(resp.headers),
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
     )
 
 
@@ -106,34 +157,57 @@ async def me(access_token: str = Depends(get_access_token)):
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10.0,
         )
+    # Auth (or a proxy in front of it) may return HTML/empty bodies on failure.
+    # Unconditional resp.json() raises JSONDecodeError and turns those into opaque 500s.
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
-    return resp.json()
+        try:
+            detail = resp.json()
+        except ValueError:
+            detail = {
+                "error": "auth_upstream_error",
+                "error_description": resp.text
+                or f"Auth service returned HTTP {resp.status_code}",
+            }
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    try:
+        return resp.json()
+    except ValueError:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "invalid_userinfo_response",
+                "error_description": "Auth service returned non-JSON userinfo",
+            },
+        )
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_api(
     path: str,
     request: Request,
-    access_token: str = Depends(get_access_token),
+    access_token: str = Depends(require_valid_access_token),
 ):
     """
     Very simple example of gateway → backend proxy with auth.
 
-    - Validates the token via dependency.
-    - Forwards method, path, query and JSON body to backend.
+    - Validates the token with the auth service before forwarding.
+    - Forwards method, path, query and raw body to backend (no re-encoding).
     - Injects Authorization header so backend can trust user info later
       (or rely on gateway-only auth).
     """
     url = f"{BACKEND_URL}/{path}"
     method = request.method
-    query = dict(request.query_params)
-    try:
-        body = await request.json()
-    except Exception:
-        body = None
+    # Preserve repeated keys (dict(query_params) keeps only the last value).
+    query = list(request.query_params.multi_items())
+    # Forward the raw body. Re-serializing via json= changes Content-Length and
+    # crashes httpx/h11 when the client sent pretty-printed or spaced JSON.
+    body = await request.body() if method in ("POST", "PUT", "PATCH") else None
 
-    headers = dict(request.headers)
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
     headers["Authorization"] = f"Bearer {access_token}"
 
     async with httpx.AsyncClient() as client:
@@ -141,14 +215,24 @@ async def proxy_api(
             method,
             url,
             params=query,
-            json=body,
+            content=body,
             headers=headers,
             timeout=15.0,
         )
 
-    return JSONResponse(
+    # Forward upstream bytes as-is. Re-parsing via resp.json()/JSONResponse:
+    # - crashes on empty application/json bodies (JSONDecodeError → 500)
+    # - corrupts non-JSON payloads (e.g. PDF) by JSON-encoding resp.text
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
+    return Response(
+        content=resp.content,
         status_code=resp.status_code,
-        content=resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
     )
 
 

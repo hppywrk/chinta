@@ -11,9 +11,15 @@ import yaml
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+# OAuth 2.0 (RFC 6749 §5.1) requires these on any response that contains tokens.
+_TOKEN_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
 
 from config import get_config
 
@@ -54,6 +60,12 @@ class ErrorResponse(BaseModel):
 
 # --- OIDC discovery and client helpers ---
 
+def default_redirect_uri() -> str:
+    """Public OAuth callback URL. IdPs never echo redirect_uri back on callback."""
+    cfg = get_config()
+    return cfg["redirect_uri_base"].rstrip("/") + "/auth/callback"
+
+
 async def get_oidc_metadata() -> dict:
     """Fetch OIDC discovery document (.well-known/openid-configuration)."""
     global _oidc_metadata
@@ -73,7 +85,7 @@ async def get_oidc_client(redirect_uri: str | None = None) -> AsyncOAuth2Client:
     """Create Authlib OIDC client with endpoints from discovery."""
     cfg = get_config()
     metadata = await get_oidc_metadata()
-    redirect = redirect_uri or (cfg["redirect_uri_base"].rstrip("/") + "/callback")
+    redirect = redirect_uri or default_redirect_uri()
     client = AsyncOAuth2Client(
         client_id=cfg["client_id"],
         client_secret=cfg["client_secret"],
@@ -133,33 +145,37 @@ async def authenticate(body: AuthenticateRequest):
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/auth/callback")
 async def auth_callback(
     code: str,
-    redirect_uri: str,
+    redirect_uri: str | None = None,
     state: str | None = None,
     nonce: str | None = None,
 ):
     """
     Same as POST /authenticate but for GET (e.g. browser redirect with code in query).
     Keeps OAuth code exchange entirely inside auth service; gateway can proxy blindly.
+
+    redirect_uri is optional: real IdPs only return code/state on the callback redirect.
+    When omitted, use the configured public callback URL (same value sent at authorize time).
     """
-    client = await get_oidc_client(redirect_uri=redirect_uri)
+    redirect = redirect_uri or default_redirect_uri()
+    client = await get_oidc_client(redirect_uri=redirect)
     try:
         token = await client.fetch_token(
             client.token_endpoint,
             code=code,
-            redirect_uri=redirect_uri,
+            redirect_uri=redirect,
         )
     except Exception as e:
         raise HTTPException(
             status_code=401,
             detail={"error": "token_exchange_failed", "error_description": str(e)},
         )
-    return token
+    return JSONResponse(content=token, headers=_TOKEN_RESPONSE_HEADERS)
 
 
 @app.get("/userinfo")
@@ -171,9 +187,11 @@ async def userinfo(access_token: str = Depends(get_token_from_header)):
             status_code=501,
             detail={"error": "userinfo_unsupported", "error_description": "IdP has no userinfo endpoint"},
         )
-    token = {"access_token": access_token, "token_type": "Bearer"}
+    # Authlib's httpx AsyncOAuth2Client attaches the bearer via client.token;
+    # get() does not accept a token= kwarg (TypeError on every /userinfo call).
+    client.token = {"access_token": access_token, "token_type": "Bearer"}
     try:
-        resp = await client.get(client.userinfo_endpoint, token=token)
+        resp = await client.get(client.userinfo_endpoint)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
