@@ -2,110 +2,164 @@ openapi: 3.0.0
 info:
   title: Chinta API
   version: 1.0.0
-  description: Personal thoughts and tasks management service
+  description: Multi-tenant notes editor backend (schema-per-tenant in PostgreSQL)
 
 paths:
-  /messages:
-    post:
-      summary: Create a new message
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MessageCreate'
+  /health:
+    get:
+      summary: Health check
       responses:
-        '201':
-          description: Message created
+        '200':
+          description: Service is up
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
-    
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /notes:
     get:
-      summary: Get messages by tags
+      summary: List the current user's notes in the tenant
       parameters:
-        - in: query
-          name: tags
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: false
+        - $ref: '#/components/parameters/TenantIdHeader'
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: List of messages
+          description: Notes for the authenticated user
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Message'
+                  $ref: '#/components/schemas/Note'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
-  /messages/{id}:
-    get:
-      summary: Get message by ID
+    post:
+      summary: Create a note
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/TenantIdHeader'
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteCreate'
       responses:
-        '200':
-          description: Message details
+        '201':
+          description: Note created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
-    
-    delete:
-      summary: Delete message
+                $ref: '#/components/schemas/Note'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notes/{note_id}:
+    put:
+      summary: Replace a note's body text
       parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
         - in: path
-          name: id
+          name: note_id
           required: true
           schema:
             type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteReplace'
+      responses:
+        '200':
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+        '404':
+          description: Note not found for this user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      summary: Delete a note
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+        - in: path
+          name: note_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
       responses:
         '204':
-          description: Message deleted
+          description: Note deleted
+        '404':
+          description: Note not found for this user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantIdHeader:
+      in: header
+      name: X-Tenant-Id
+      required: true
+      schema:
+        type: string
+      description: Tenant identifier; data is isolated in a dedicated PostgreSQL schema.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token
+
   schemas:
-    MessageCreate:
+    NoteCreate:
       type: object
       required:
-        - user_id
-        - content
-        - tags
+        - body
       properties:
-        user_id:
-          type: integer
-        content:
+        body:
           type: string
-        tags:
-          type: array
-          items:
-            type: string
 
-    Message:
+    NoteReplace:
       type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+
+    Note:
+      type: object
+      required:
+        - id
+        - body
+        - modified_at
       properties:
         id:
           type: integer
-        user_id:
-          type: integer
-        content:
+          format: int64
+        body:
           type: string
-        tags:
-          type: array
-          items:
-            type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
+        modified_at:
           type: string
           format: date-time

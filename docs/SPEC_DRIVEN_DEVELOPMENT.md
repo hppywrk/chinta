@@ -124,7 +124,7 @@ Canonical file: `chinta-auth/api/auth-openapi.yml`.
 | Artifact | Role | Next step |
 |----------|------|-----------|
 | `docs/API_CONTRACTS_V1.md` | Tenant registry, entitlements, routing | OpenAPI per service when B1/B2 land |
-| `chinta/api/chinta-openapi.yml` | Messages API for C++ backend | Implement routes to match spec; serve `/openapi.yaml` when service runs |
+| `chinta/api/chinta-openapi.yml` | Notes API for Python backend | Implemented in `chinta/app.py`; serve `/openapi.yaml` when service runs |
 | `docs/MESSAGING_ARCHITECTURE_V1.md` | Event envelope | AsyncAPI or JSON Schema in backlog **B0.4** |
 
 `API_CONTRACTS_V1.md` §8 still applies: full OpenAPI for every service is not a v1 platform goal—but **edge + auth** are fully OpenAPI-driven now.
