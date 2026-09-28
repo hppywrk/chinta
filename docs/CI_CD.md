@@ -98,7 +98,7 @@ Local Docker (same compose file):
 
 ```bash
 export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
-docker compose up -d chinta-db chinta-auth chinta-gateway
+docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway
 ```
 
 ### 2.2 GitHub configuration
