@@ -1,5 +1,5 @@
 -- Shared catalog bootstrap. Tenant runtime data (e.g. notes) lives in per-tenant
--- schemas created by chinta-backend (t_<tenant_id>).
+-- schemas created by chinta-backend (t_<sha256(tenant_id) prefix>; see chinta/db.py).
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,

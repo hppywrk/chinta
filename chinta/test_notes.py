@@ -84,7 +84,10 @@ def _headers(tenant: str, token: str = "good-token") -> dict[str, str]:
 
 
 def test_tenant_schema_name():
-    assert tenant_schema_name("acme-corp") == "t_acme_corp"
+    # Hash-based names: distinct ids must not share a schema (see test_db_unit).
+    assert tenant_schema_name("acme-corp") != tenant_schema_name("acme_corp")
+    assert tenant_schema_name("acme-corp").startswith("t_")
+    assert len(tenant_schema_name("acme-corp")) <= 63
 
 
 def test_notes_crud_and_tenant_isolation(client, store):
@@ -122,6 +125,27 @@ def test_notes_crud_and_tenant_isolation(client, store):
         headers=_headers(tenant_a),
     )
     assert r.status_code == 404
+
+
+def test_normalized_tenant_ids_do_not_share_notes(client):
+    """acme-corp / acme.corp / acme_corp must not share a schema or notes."""
+    r = client.post(
+        "/notes",
+        json={"body": "only-hyphen-tenant"},
+        headers=_headers("acme-corp"),
+    )
+    assert r.status_code == 201
+    note_id = r.json()["id"]
+
+    for other in ("acme.corp", "acme_corp"):
+        r = client.get("/notes", headers=_headers(other))
+        assert r.status_code == 200
+        assert all(n["id"] != note_id for n in r.json())
+        assert all(n["body"] != "only-hyphen-tenant" for n in r.json())
+
+    r = client.get("/notes", headers=_headers("acme-corp"))
+    assert r.status_code == 200
+    assert any(n["id"] == note_id for n in r.json())
 
 
 def test_requires_tenant_header(client):
