@@ -8,7 +8,7 @@ CHINTA_ROOT="${CHINTA_ROOT:-/opt/chinta}"
 DEPLOY_ENV="${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}"
 COMPOSE_FILE="${CHINTA_ROOT}/docker-compose.yml"
 # Space-separated service names from the default stack (override in deploy.env).
-COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-chinta-db chinta-auth chinta-gateway}"
+COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-chinta-db chinta-auth chinta-backend chinta-gateway}"
 SYSTEMD_UNIT="chinta-compose.service"
 
 log() { echo "[vm-deploy] $*"; }

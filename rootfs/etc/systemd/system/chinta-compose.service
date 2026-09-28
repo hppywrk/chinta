@@ -11,8 +11,8 @@ RemainAfterExit=yes
 WorkingDirectory=/opt/chinta
 EnvironmentFile=-/etc/chinta/deploy.env
 Environment=CHINTA_DEPLOY_ENV=/etc/chinta/deploy.env
-ExecStart=/usr/bin/docker compose --env-file /etc/chinta/deploy.env up -d chinta-db chinta-auth chinta-gateway
-ExecStop=/usr/bin/docker compose stop chinta-db chinta-auth chinta-gateway
+ExecStart=/usr/bin/docker compose --env-file /etc/chinta/deploy.env up -d chinta-db chinta-auth chinta-backend chinta-gateway
+ExecStop=/usr/bin/docker compose stop chinta-db chinta-auth chinta-backend chinta-gateway
 TimeoutStartSec=600
 
 [Install]

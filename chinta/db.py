@@ -11,21 +11,32 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$")
+_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,60}$")
+# PostgreSQL identifiers are limited to 63 bytes; schema is t_<tenant_id>.
+_MAX_TENANT_ID_LEN = 61
 
 
 def validate_tenant_id(tenant_id: str) -> str:
     tenant_id = tenant_id.strip()
-    if not tenant_id or not _TENANT_ID_RE.match(tenant_id):
+    if not tenant_id or len(tenant_id) > _MAX_TENANT_ID_LEN:
+        raise ValueError("invalid tenant id")
+    if not _TENANT_ID_RE.match(tenant_id):
         raise ValueError("invalid tenant id")
     return tenant_id
 
 
 def tenant_schema_name(tenant_id: str) -> str:
-    """Map tenant id to a PostgreSQL schema (platform convention: t_<id>)."""
-    validate_tenant_id(tenant_id)
-    safe = tenant_id.replace("-", "_").replace(".", "_")
-    return f"t_{safe}"
+    """
+    Map tenant id to a PostgreSQL schema (platform convention: t_<tenant_id>).
+
+    The tenant id is preserved verbatim (no normalization) so distinct ids
+    never share a schema. psycopg.sql.Identifier quotes names when needed.
+    """
+    tenant_id = validate_tenant_id(tenant_id)
+    schema = f"t_{tenant_id}"
+    if len(schema) > 63:
+        raise ValueError("tenant id too long for schema name")
+    return schema
 
 
 @dataclass(frozen=True)
@@ -52,6 +63,7 @@ class NotesStore:
             yield conn
 
     def _ensure_schema(self, conn: psycopg.Connection, schema: str) -> None:
+        # Showcase-only: lazy DDL per request. Replace with B5.0 schema creation service.
         with conn.cursor() as cur:
             cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema)))
             cur.execute(
@@ -68,10 +80,11 @@ class NotesStore:
             )
             cur.execute(
                 sql.SQL(
-                    "CREATE INDEX IF NOT EXISTS {} ON {}.notes (user_id, modified_at DESC)"
+                    "CREATE INDEX IF NOT EXISTS {} ON {}.{} (user_id, modified_at DESC)"
                 ).format(
-                    sql.Identifier(f"idx_{schema}_notes_user_modified"),
+                    sql.Identifier("idx_notes_user_modified"),
                     sql.Identifier(schema),
+                    sql.Identifier("notes"),
                 )
             )
         conn.commit()

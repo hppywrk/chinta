@@ -234,12 +234,30 @@ Definition of done:
 
 Reference specification: `docs/MIGRATION_SYSTEM_V1.md`
 
-### B5.1 Provision tenant schema on onboarding
+### B5.0 Tenant schema creation service
 Priority: P0  
-Dependencies: B1.1
+Dependencies: B0.1, B1.1 (registry owns canonical `schema_name`)
+
+Context: `chinta-backend` currently provisions `t_<tenant_id>` schemas lazily on first notes request (showcase only). Production data plane services must not create schemas on the request path.
 
 Tasks:
-- Implement schema creation helper with strict schema naming rules.
+- Add an internal **schema creation service** (or control-plane worker) invoked on tenant onboarding and module enablement.
+- Persist authoritative `tenant_id` → `schema_name` mapping in the tenant registry (`API_CONTRACTS_V1.md`); reject client-supplied schema names on data plane APIs.
+- Expose idempotent `ProvisionTenantSchema` (name TBD): create schema, run baseline module migrations, record version in `platform.tenant_schema_versions`.
+- Emit audit/event on success/failure; support retry for partial failures.
+- Remove lazy `_ensure_schema` from `chinta-backend` once provisioning is wired in dev/staging.
+
+Definition of done:
+- New tenant never hits a data-plane API before its schema exists (enforced by gateway/registry or backend precondition).
+- Re-running provision for the same tenant is a no-op.
+- `chinta-backend` integration tests use explicit provision hook or test fixture, not per-request DDL.
+
+### B5.1 Provision tenant schema on onboarding
+Priority: P0  
+Dependencies: B1.1, B5.0
+
+Tasks:
+- Wire tenant registry create/status flows to call B5.0 schema creation service.
 - Apply baseline module migrations to new tenant schema.
 
 Definition of done:

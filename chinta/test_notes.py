@@ -83,8 +83,11 @@ def _headers(tenant: str, token: str = "good-token") -> dict[str, str]:
     }
 
 
-def test_tenant_schema_name():
-    assert tenant_schema_name("acme-corp") == "t_acme_corp"
+def test_tenant_schema_name_distinct():
+    assert tenant_schema_name("acme-corp") == "t_acme-corp"
+    assert tenant_schema_name("acme.corp") == "t_acme.corp"
+    assert tenant_schema_name("acme_corp") == "t_acme_corp"
+    assert tenant_schema_name("acme-corp") != tenant_schema_name("acme.corp")
 
 
 def test_notes_crud_and_tenant_isolation(client, store):

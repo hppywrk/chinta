@@ -12,3 +12,8 @@ def test_validate_tenant_id_accepts_safe_values():
 def test_validate_tenant_id_rejects_empty():
     with pytest.raises(ValueError):
         validate_tenant_id("")
+
+
+def test_validate_tenant_id_rejects_too_long():
+    with pytest.raises(ValueError):
+        validate_tenant_id("a" * 62)
