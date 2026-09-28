@@ -4,24 +4,25 @@
 
 ### Project snapshot
 
-Chinta is a multi-tenant microservices project. In this repository state, only two services are operational:
+Chinta is a multi-tenant microservices project. Operational Python services:
 
 - **chinta-auth** (port 8083): FastAPI OIDC authentication service
 - **chinta-gateway** (port 8084): FastAPI edge gateway
+- **chinta** / **chinta-backend** (port 8080): FastAPI notes editor API (PostgreSQL, schema-per-tenant)
 
-Everything else is partial, stubbed, or missing. Plan work around that limitation.
+The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite. **chinta-net** and root `Dockerfile.chinta` remain experimental (`full-stack` compose profile only).
 
 ### Current repository layout (practical view)
 
 - `/chinta-auth`: working Python service (pytest under `chinta-auth/test_*.py`)
 - `/chinta-gateway`: working Python service (`httpx` + `pyyaml` in requirements; pytest under `chinta-gateway/test_*.py`)
-- `/chinta`: C++ backend skeleton only (not production-ready)
-- `/chinta-db`: SQL bootstrap file (`init.sql`) only
+- `/chinta`: working Python backend (`psycopg`, notes CRUD; pytest under `chinta/test_*.py`)
+- `/chinta-db`: SQL bootstrap file (`init.sql`) for shared catalog; tenant notes live in `t_<tenant_id>` schemas created by the backend
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
 - `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
-- `docker-compose.yml`: service catalog (auth, gateway, db in default stack; backend/net under `full-stack` profile)
+- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`; `chinta-net` under `full-stack` profile
 
 ### Local environment bootstrap
 
@@ -34,7 +35,10 @@ source /workspace/.venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r /workspace/chinta-auth/requirements.txt
 python -m pip install -r /workspace/chinta-gateway/requirements.txt
+python -m pip install -r /workspace/chinta/requirements.txt
 ```
+
+Notes API requires PostgreSQL (e.g. `docker compose up -d chinta-db`).
 
 ### Running services locally
 
@@ -51,7 +55,14 @@ cd /workspace/chinta-auth
 OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test uvicorn app:app --host 0.0.0.0 --port 8083 --reload
 ```
 
-Start gateway service (local auth URL, backend may be unavailable):
+Start backend (needs DB):
+
+```bash
+cd /workspace/chinta
+CHINTA_DB_HOST=localhost CHINTA_AUTH_URL=http://localhost:8083 uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+```
+
+Start gateway service:
 
 ```bash
 cd /workspace/chinta-gateway
@@ -65,6 +76,7 @@ Health checks:
 ```bash
 curl http://localhost:8083/health  # auth
 curl http://localhost:8084/health  # gateway
+curl http://localhost:8080/health  # backend
 ```
 
 Useful endpoint checks:
@@ -72,34 +84,39 @@ Useful endpoint checks:
 ```bash
 curl http://localhost:8083/openapi.yaml
 curl http://localhost:8084/openapi.yaml
+curl http://localhost:8080/openapi.yaml
 curl -i http://localhost:8084/me  # expected 401 without Bearer token
 python /workspace/scripts/validate_openapi_specs.py
+```
+
+Notes via gateway (Bearer token + `X-Tenant-Id`):
+
+```bash
+curl -H "Authorization: Bearer <token>" -H "X-Tenant-Id: demo" http://localhost:8084/api/notes
 ```
 
 Swagger UI:
 
 - Auth: http://localhost:8083/docs
 - Gateway: http://localhost:8084/docs
+- Backend: http://localhost:8080/docs
 
 ### Cloud Agent
 
-The saved Cloud Agent environment installs both Python requirement files into `/workspace/.venv` and, on each boot, starts chinta-auth (`0.0.0.0:8083`) and chinta-gateway (`0.0.0.0:8084`) with `OIDC_CLIENT_ID=test` and `OIDC_CLIENT_SECRET=test`. If `GET /health` on those ports already returns `{"status":"ok"}`, leave the existing processes running.
+The saved Cloud Agent environment installs Python requirement files into `/workspace/.venv` and may start chinta-auth (`0.0.0.0:8083`) and chinta-gateway (`0.0.0.0:8084`) with `OIDC_CLIENT_ID=test` and `OIDC_CLIENT_SECRET=test`. If `GET /health` on those ports already returns `{"status":"ok"}`, leave the existing processes running. Backend and PostgreSQL are not always started in the cloud snapshot; use `docker compose up -d chinta-db chinta-backend` when testing notes.
 
-`chinta-gateway/requirements.txt` declares `httpx` (required by `app.py`). Install both Python requirement files into the shared venv.
+Install all three Python `requirements.txt` files into the shared venv. Do not drop `httpx` from `chinta-gateway/requirements.txt`.
 
 ### Known blockers and gotchas
 
-- `docker compose --profile full-stack` still builds incomplete C++/net images (`Dockerfile.chinta`, `Dockerfile.chinta-net`).
-- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-gateway`) via `scripts/deploy/vm-deploy.sh`; optional `chinta-compose.service` starts the same stack on boot.
-- `Dockerfile.chinta` copies `lib/http-service`, but only `lib/http/include/...` exists.
-- `Dockerfile.chinta` runs `/usr/local/bin/chinta --config /etc/chinta/chinta.yaml`, while sample config file is `config/chinta.yml` (name mismatch).
+- `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
+- Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
+- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`) via `scripts/deploy/vm-deploy.sh`.
 - `Dockerfile.cinta-db` uses `chinta-db/init.sql`.
-- C++ backend file is misnamed as `chinta/src/ CMakeLists.txt` (leading space), which breaks normal CMake workflows.
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
+- Backend validates Bearer tokens via auth `/userinfo` and requires `X-Tenant-Id` on every notes request.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
-- Auth and gateway include pytest suites under each service directory; run with `pip install pytest` then `pytest` from the service directory. No README, CONTRIBUTING guide, or Makefile are currently present.
-- Do not drop `httpx` from `chinta-gateway/requirements.txt` — proxy routes import it at module load.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
 - For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
 
