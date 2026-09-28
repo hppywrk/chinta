@@ -19,7 +19,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/chinta`: working Python backend (`psycopg`, notes CRUD; pytest under `chinta/test_*.py`)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) for shared catalog; tenant notes live in per-tenant schemas (`t_<sha256-prefix>`) created by the backend
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
-- `/docs`: platform specs (`API_CONTRACTS_V1.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
+- `/docs`: platform specs (`API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
 - `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`; `chinta-net` under `full-stack` profile
