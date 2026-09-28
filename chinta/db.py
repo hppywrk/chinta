@@ -1,6 +1,7 @@
 """PostgreSQL access with schema-per-tenant isolation."""
 from __future__ import annotations
 
+import hashlib
 import re
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 _TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$")
+# PostgreSQL truncates identifiers to NAMEDATALEN-1 (63) bytes silently.
+_PG_IDENT_MAX = 63
 
 
 def validate_tenant_id(tenant_id: str) -> str:
@@ -22,10 +25,25 @@ def validate_tenant_id(tenant_id: str) -> str:
 
 
 def tenant_schema_name(tenant_id: str) -> str:
-    """Map tenant id to a PostgreSQL schema (platform convention: t_<id>)."""
+    """Map tenant id to a PostgreSQL schema name that cannot collide.
+
+    A naive ``t_<id>`` with ``-``/``.`` folded to ``_`` merges distinct tenants
+    (``acme-corp`` / ``acme.corp`` / ``acme_corp``). Long ids also collide after
+    PostgreSQL's silent 63-byte identifier truncation. Hash the id so every
+    validated tenant maps to a unique schema within the identifier limit.
+    """
     validate_tenant_id(tenant_id)
-    safe = tenant_id.replace("-", "_").replace(".", "_")
-    return f"t_{safe}"
+    digest = hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()
+    # ``t_`` + 60 hex chars == 62 bytes, safely under the 63-byte limit.
+    return f"t_{digest[:60]}"
+
+
+def tenant_notes_index_name(schema: str) -> str:
+    """Stable per-schema index name that also fits in 63 bytes."""
+    digest = hashlib.sha256(schema.encode("utf-8")).hexdigest()
+    name = f"i_{digest[:60]}"
+    assert len(name) <= _PG_IDENT_MAX
+    return name
 
 
 @dataclass(frozen=True)
@@ -70,7 +88,7 @@ class NotesStore:
                 sql.SQL(
                     "CREATE INDEX IF NOT EXISTS {} ON {}.notes (user_id, modified_at DESC)"
                 ).format(
-                    sql.Identifier(f"idx_{schema}_notes_user_modified"),
+                    sql.Identifier(tenant_notes_index_name(schema)),
                     sql.Identifier(schema),
                 )
             )
