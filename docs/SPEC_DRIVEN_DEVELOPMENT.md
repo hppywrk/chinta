@@ -34,6 +34,11 @@ docs/
   API_CONTRACTS_V1.md       # Control-plane HTTP design (pre-OpenAPI)
   SPEC_DRIVEN_DEVELOPMENT.md  # This file
   IMPLEMENTATION_BACKLOG_V1.md
+  API_CONTRACTS_V2.md
+  IMPLEMENTATION_BACKLOG_V2.md
+  LOGGING_OBSERVABILITY_V2.md
+  CONTROL_PLANE_DDL_V2.sql
+  MESSAGING_EVENTS_V2.md
 
 scripts/
   validate_openapi_specs.py # Local/CI: parse and sanity-check all *-openapi.yml
@@ -150,8 +155,10 @@ Later (**B0.5**):
 ## 8) Related documents
 
 - Platform plan: `PLATFORM_PLAN.md`
-- Control-plane API design: `docs/API_CONTRACTS_V1.md`
-- Ordered delivery: `docs/IMPLEMENTATION_BACKLOG_V1.md` (sections **B0.5**, **B_GW.x**, **B_AUTH.1**)
+- Control-plane API design: `docs/API_CONTRACTS_V1.md` (v1); grants matrix + authz decide: `docs/API_CONTRACTS_V2.md`
+- Ordered delivery: `docs/IMPLEMENTATION_BACKLOG_V1.md` (v1); logging + authz matrix: `docs/IMPLEMENTATION_BACKLOG_V2.md`
+- Logging: `docs/LOGGING_OBSERVABILITY_V2.md`
+- DDL delta: `docs/CONTROL_PLANE_DDL_V2.sql`
 
 ---
 
@@ -159,3 +166,4 @@ Later (**B0.5**):
 
 - v1 (2026-09-25): Initial adoption guide; gateway OpenAPI v1; validation script; backlog entries for deferred gateway/auth/CI work.
 - v1.1 (2026-09-25): Clarify contract-first applies to all HTTP services/languages, not Python only (PR #16 review).
+- v1.2 (2026-09-28): Link v2 control-plane specs (authz matrix, logging backlog).

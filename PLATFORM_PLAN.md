@@ -237,7 +237,17 @@ Reusability profiles:
 
 This allows building a smaller MVP quickly while preserving the same control-plane and service contracts.
 
-## 15) Change Log
+## 15) v2 scope (authz matrix + logging)
+
+After v1 control-plane and gateway entitlement enforcement, v2 adds:
+
+- **Grants matrix** — role × module × feature, route bindings, `POST /v1/authz/decide` (`docs/API_CONTRACTS_V2.md`).
+- **Decision cache** — TTL + revisions + NATS invalidation (`docs/MESSAGING_EVENTS_V2.md`, backlog **B2V.3**, **B4V.2**).
+- **Logging system** — structured JSON, gateway authz decision events, optional local Loki/Grafana profile (`docs/LOGGING_OBSERVABILITY_V2.md`).
+
+Delivery order: `docs/IMPLEMENTATION_BACKLOG_V2.md`.
+
+## 16) Change Log
 
 - v1 (2026-04-03): Initial plan created from architecture discussion.
 - v1.1 (2026-04-03): Added concrete v1 artifacts:
@@ -248,3 +258,4 @@ This allows building a smaller MVP quickly while preserving the same control-pla
 - v1.3 (2026-04-03): Added `docs/MIGRATION_SYSTEM_V1.md` with migration runner architecture, SDK contract, release workflow, and recovery model.
 - v1.4 (2026-04-03): Added `docs/MESSAGING_ARCHITECTURE_V1.md` with broker decision (NATS JetStream), event contract, retries/DLQ, and rollout phases.
 - v1.5 (2026-09-25): Added `docs/SPEC_DRIVEN_DEVELOPMENT.md`; gateway OpenAPI v1 aligned with auth pattern.
+- v1.6 (2026-09-28): v2 specs for authz matrix, cache invalidation, and platform logging (`API_CONTRACTS_V2`, `IMPLEMENTATION_BACKLOG_V2`, `LOGGING_OBSERVABILITY_V2`, DDL/messaging deltas).
