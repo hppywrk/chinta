@@ -6,17 +6,21 @@ set -euo pipefail
 GIT_REF="${1:-main}"
 CHINTA_ROOT="${CHINTA_ROOT:-/opt/chinta}"
 DEPLOY_ENV="${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}"
-COMPOSE_FILE="${CHINTA_ROOT}/docker-compose.yml"
-# Space-separated service names from the default stack (override in deploy.env).
-COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-chinta-db chinta-auth chinta-gateway}"
 SYSTEMD_UNIT="chinta-compose.service"
+# Must match docker-compose.yml x-chinta-vm.default_services (notes API lives here).
+DEFAULT_COMPOSE_SERVICES="chinta-db chinta-auth chinta-backend chinta-gateway"
 
 log() { echo "[vm-deploy] $*"; }
 
+# Load deploy.env before resolving paths/services so overrides in that file apply.
 if [[ -f "${DEPLOY_ENV}" ]]; then
   # shellcheck disable=SC1090
   source "${DEPLOY_ENV}"
 fi
+
+CHINTA_ROOT="${CHINTA_ROOT:-/opt/chinta}"
+COMPOSE_FILE="${CHINTA_ROOT}/docker-compose.yml"
+COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-$DEFAULT_COMPOSE_SERVICES}"
 
 export CHINTA_DEPLOY_ENV="${DEPLOY_ENV}"
 

@@ -27,6 +27,9 @@ jobs:
       - name: Validate OpenAPI YAML files
         run: python scripts/validate_openapi_specs.py
 
+      - name: Validate CD default services include backend
+        run: bash scripts/deploy/test_vm_deploy_services.sh
+
   python-services:
     name: Python services
     runs-on: ubuntu-latest
