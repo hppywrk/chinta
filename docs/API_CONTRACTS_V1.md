@@ -1,7 +1,7 @@
 # API Contracts v1 (Control Plane)
 
 Status: Draft v1  
-Last updated: 2026-04-03
+Last updated: 2026-09-29
 
 This document defines initial service contracts for:
 
@@ -16,6 +16,7 @@ It is designed to be implemented behind `chinta-gateway` and consumed by module 
 - API style: JSON over HTTPS.
 - Authentication:
   - External/client endpoints: bearer JWT from `chinta-auth`.
+  - **Platform admin mutations** (`POST/PUT/DELETE` under `/v1/users`, `/v1/tenants`, memberships): bootstrap admin token (`Authorization: Bearer` or `X-Admin-Token`). See `docs/ADMIN_V1.md`.
   - Internal service endpoints: service JWT or mTLS identity.
 - Correlation: accept and forward `X-Request-Id`.
 - Time format: ISO-8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`).
@@ -66,7 +67,27 @@ Response `201`:
 }
 ```
 
-### 2.2 Get tenant
+### 2.2 List tenants
+
+`GET /v1/tenants?limit=50`
+
+Response `200`:
+
+```json
+{
+  "items": [
+    {
+      "tenant_id": "a5f3f3d2-3e34-4c88-a08c-f114f357ddf9",
+      "slug": "acme",
+      "display_name": "Acme Inc",
+      "status": "ACTIVE_SHARED",
+      "schema_name": "t_4f9a7c2e…"
+    }
+  ]
+}
+```
+
+### 2.3 Get tenant
 
 `GET /v1/tenants/{tenant_id}`
 
@@ -84,7 +105,13 @@ Response `200`:
 }
 ```
 
-### 2.3 Update tenant status (controlled transition)
+### 2.4 Get tenant by slug
+
+`GET /v1/tenants/by-slug/{slug}`
+
+Same response shape as §2.3.
+
+### 2.5 Update tenant status (controlled transition)
 
 `POST /v1/tenants/{tenant_id}/status-transitions`
 
@@ -109,7 +136,7 @@ Response `200`:
 }
 ```
 
-### 2.4 Register dedicated runtime target
+### 2.6 Register dedicated runtime target
 
 `POST /v1/tenants/{tenant_id}/runtime-targets`
 
@@ -133,7 +160,7 @@ Response `201`:
 }
 ```
 
-### 2.5 Switch active runtime target
+### 2.7 Switch active runtime target
 
 `POST /v1/tenants/{tenant_id}/runtime-targets/{target_id}/activate`
 
@@ -145,6 +172,79 @@ Response `200`:
   "active_target_type": "DEDICATED"
 }
 ```
+
+## 2A) Platform users and memberships (`chinta-platform`)
+
+Implemented by **chinta-platform** (port 8085 in local compose). Operational guide: `docs/ADMIN_V1.md`.
+
+### 2A.1 Create user
+
+`POST /v1/users` (admin)
+
+Request:
+
+```json
+{
+  "email": "owner@acme.example",
+  "display_name": "Ada Owner",
+  "external_subject": "google-oauth2|abc123"
+}
+```
+
+If `external_subject` is omitted, the service stores a placeholder (`unlinked:<email>`) until linked after first OIDC login.
+
+Response `201`:
+
+```json
+{
+  "user_id": "7d7a5f16-a948-4d39-b83d-d3219f7a2f80",
+  "email": "owner@acme.example",
+  "external_subject": "google-oauth2|abc123",
+  "display_name": "Ada Owner",
+  "is_active": true
+}
+```
+
+### 2A.2 Get user
+
+`GET /v1/users/{user_id}` (admin)  
+`GET /v1/users/by-email/{email}` (admin)
+
+### 2A.3 Memberships
+
+Base path: `/v1/tenants/{tenant_id}/memberships` (admin). Shapes match `docs/API_CONTRACTS_V2.md` §3 (without `membership_revision` in v1 skeleton).
+
+### 2A.4 Access resolve (gateway v1 shortcut)
+
+`POST /v1/access/resolve` (internal; no admin token)
+
+Request:
+
+```json
+{
+  "tenant_slug": "acme",
+  "user_external_subject": "google-oauth2|abc123",
+  "module_code": "notes",
+  "operation": "write"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "allowed": true,
+  "deny_reason": null,
+  "tenant_id": "a5f3f3d2-3e34-4c88-a08c-f114f357ddf9",
+  "tenant_status": "ACTIVE_SHARED",
+  "schema_name": "t_4f9a7c2e…",
+  "role_code": "member"
+}
+```
+
+`operation` is `read` or `write`. `viewer` is read-only (`write` → deny with `ENTITLEMENT_DENIED` until v2 authz matrix exists).
+
+---
 
 ## 3) Entitlements Service
 

@@ -9,6 +9,7 @@ x-chinta-vm:
     - chinta-auth
     - chinta-backend
     - chinta-gateway
+    - chinta-platform
 
 services:
   chinta-db:
@@ -67,6 +68,23 @@ services:
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_AUTH_CALLBACK_URL: ${CHINTA_AUTH_CALLBACK_URL:-http://localhost:8084/auth/callback}
       CHINTA_GATEWAY_PORT: "8084"
+    networks:
+      - chinta-network
+
+  chinta-platform:
+    build:
+      context: ./chinta-platform
+      dockerfile: Dockerfile
+    container_name: chinta-platform
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    depends_on:
+      - chinta-db
+    environment:
+      CHINTA_PLATFORM_DATABASE_URL: postgresql://chinta_user:chinta_password@chinta-db:5432/chinta
+      CHINTA_PLATFORM_ADMIN_TOKEN: ${CHINTA_PLATFORM_ADMIN_TOKEN:-dev-admin-token}
+      CHINTA_PLATFORM_PORT: "8085"
     networks:
       - chinta-network
 

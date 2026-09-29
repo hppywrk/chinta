@@ -134,6 +134,7 @@ Tasks:
 - Create service endpoints from `API_CONTRACTS_V1.md` section 2.
 - Enforce tenant status transition matrix server-side.
 - Create owner membership at tenant creation.
+- **In progress (skeleton):** `chinta-platform` + `chinta-admin` per `docs/ADMIN_V1.md` (users, memberships, access resolve; gateway wiring deferred).
 
 Definition of done:
 - API tests cover valid and invalid transitions.

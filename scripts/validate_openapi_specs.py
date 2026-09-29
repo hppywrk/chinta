@@ -14,6 +14,7 @@ SPEC_GLOBS = (
     REPO_ROOT / "chinta-auth" / "api" / "auth-openapi.yml",
     REPO_ROOT / "chinta-gateway" / "api" / "gateway-openapi.yml",
     REPO_ROOT / "chinta" / "api" / "chinta-openapi.yml",
+    REPO_ROOT / "chinta-platform" / "api" / "platform-openapi.yml",
 )
 
 
