@@ -400,7 +400,17 @@ Definition of done:
 
 ---
 
-## 9) Suggested first execution slice (smallest useful increment)
+## 9) Deferred to v2 (explicit)
+
+v1 intentionally omits a **platform logging contract** and a **user × tenant × operation grants matrix**. Those are specified in:
+
+- `docs/IMPLEMENTATION_BACKLOG_V2.md`
+- `docs/API_CONTRACTS_V2.md`
+- `docs/LOGGING_OBSERVABILITY_V2.md`
+
+---
+
+## 10) Suggested first execution slice (smallest useful increment)
 
 Target scope:
 - B0.1, B1.1, B2.2 (minimal), B4.1 (minimal), B5.1
@@ -413,7 +423,7 @@ Outcome:
 
 ---
 
-## 10) Risks and mitigations
+## 11) Risks and mitigations
 
 - Connection pool + tenant context leakage:
   - Mitigation: avoid global `search_path`; use explicit schema qualification or `SET LOCAL` in transaction.
