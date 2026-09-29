@@ -11,6 +11,7 @@ from fastapi import HTTPException, Request
 class RequestContext:
     user_id: str
     tenant_id: str
+    tenant_schema: str | None = None
 
 
 async def resolve_request_context(request: Request, auth_base_url: str) -> RequestContext:
@@ -44,4 +45,10 @@ async def resolve_request_context(request: Request, auth_base_url: str) -> Reque
     if not user_id:
         raise HTTPException(status_code=502, detail="Userinfo missing sub claim")
 
-    return RequestContext(user_id=str(user_id), tenant_id=tenant_id)
+    tenant_schema = request.headers.get("X-Tenant-Schema", "").strip() or None
+
+    return RequestContext(
+        user_id=str(user_id),
+        tenant_id=tenant_id,
+        tenant_schema=tenant_schema,
+    )

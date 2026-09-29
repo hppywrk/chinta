@@ -13,6 +13,18 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 _TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$")
+_SCHEMA_RE = re.compile(r"^t_[a-z0-9_]+$")
+
+
+class TenantSchemaNotFoundError(Exception):
+    """Raised when platform enforcement forbids lazy schema creation."""
+
+
+def validate_tenant_schema(schema: str) -> str:
+    schema = schema.strip()
+    if not schema or not _SCHEMA_RE.match(schema):
+        raise ValueError("invalid tenant schema")
+    return schema
 # PostgreSQL truncates identifiers to NAMEDATALEN-1 (63) bytes silently.
 _PG_IDENT_MAX = 63
 
@@ -61,8 +73,9 @@ class Note:
 
 
 class NotesStore:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, *, enforce_platform: bool = False) -> None:
         self._database_url = database_url
+        self._enforce_platform = enforce_platform
 
     @contextmanager
     def _connection(self) -> Iterator[psycopg.Connection]:
@@ -94,10 +107,37 @@ class NotesStore:
             )
         conn.commit()
 
-    def list_notes(self, tenant_id: str, user_id: str) -> list[Note]:
-        schema = tenant_schema_name(tenant_id)
+    def _schema_exists(self, conn: psycopg.Connection, schema: str) -> bool:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM information_schema.schemata
+                WHERE schema_name = %s
+                """,
+                (schema,),
+            )
+            return cur.fetchone() is not None
+
+    def _resolve_schema(self, tenant_id: str, tenant_schema: str | None) -> str:
+        if tenant_schema:
+            return validate_tenant_schema(tenant_schema)
+        if self._enforce_platform:
+            raise ValueError("X-Tenant-Schema is required when platform enforcement is enabled")
+        return tenant_schema_name(tenant_id)
+
+    def _prepare_schema(self, conn: psycopg.Connection, schema: str) -> None:
+        if self._enforce_platform:
+            if not self._schema_exists(conn, schema):
+                raise TenantSchemaNotFoundError(schema)
+            return
+        self._ensure_schema(conn, schema)
+
+    def list_notes(
+        self, tenant_id: str, user_id: str, tenant_schema: str | None = None
+    ) -> list[Note]:
+        schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
-            self._ensure_schema(conn, schema)
+            self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
                     sql.SQL(
@@ -113,10 +153,12 @@ class NotesStore:
                 rows = cur.fetchall()
         return [Note(id=r["id"], body=r["body"], modified_at=r["modified_at"]) for r in rows]
 
-    def create_note(self, tenant_id: str, user_id: str, body: str) -> Note:
-        schema = tenant_schema_name(tenant_id)
+    def create_note(
+        self, tenant_id: str, user_id: str, body: str, tenant_schema: str | None = None
+    ) -> Note:
+        schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
-            self._ensure_schema(conn, schema)
+            self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
                     sql.SQL(
@@ -132,10 +174,17 @@ class NotesStore:
             conn.commit()
         return Note(id=row["id"], body=row["body"], modified_at=row["modified_at"])
 
-    def replace_note(self, tenant_id: str, user_id: str, note_id: int, body: str) -> Note | None:
-        schema = tenant_schema_name(tenant_id)
+    def replace_note(
+        self,
+        tenant_id: str,
+        user_id: str,
+        note_id: int,
+        body: str,
+        tenant_schema: str | None = None,
+    ) -> Note | None:
+        schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
-            self._ensure_schema(conn, schema)
+            self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
                     sql.SQL(
@@ -154,10 +203,12 @@ class NotesStore:
             return None
         return Note(id=row["id"], body=row["body"], modified_at=row["modified_at"])
 
-    def delete_note(self, tenant_id: str, user_id: str, note_id: int) -> bool:
-        schema = tenant_schema_name(tenant_id)
+    def delete_note(
+        self, tenant_id: str, user_id: str, note_id: int, tenant_schema: str | None = None
+    ) -> bool:
+        schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
-            self._ensure_schema(conn, schema)
+            self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
                     sql.SQL("DELETE FROM {}.notes WHERE id = %s AND user_id = %s").format(

@@ -13,6 +13,15 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse, RedirectResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from platform_access import (
+    AccessDecision,
+    deny_detail,
+    http_status_for_deny,
+    platform_enforced,
+    resolve_tenant_access,
+)
+from userinfo import AuthenticatedUser, fetch_authenticated_user
+
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "gateway-openapi.yml"
 
@@ -28,6 +37,15 @@ AUTH_BASE_URL = os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083")
 WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
 MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", "http://chinta-web:8000/m")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
+PLATFORM_BASE_URL = os.environ.get("CHINTA_PLATFORM_URL", "").strip()
+
+# Headers set by the gateway; clients must not spoof them on /api.
+_GATEWAY_INJECTED_HEADERS = frozenset(
+    {
+        "x-tenant-schema",
+        "x-platform-user-role",
+    }
+)
 
 # Framing / hop-by-hop headers must not be blindly forwarded. httpx auto-decodes
 # Content-Encoding (e.g. gzip) but leaves the upstream Content-Length, which then
@@ -58,9 +76,9 @@ async def get_access_token(
     return credentials.credentials
 
 
-async def require_valid_access_token(
+async def require_authenticated_user(
     access_token: str = Depends(get_access_token),
-) -> str:
+) -> AuthenticatedUser:
     """
     Require a Bearer token that the auth service accepts.
 
@@ -68,18 +86,7 @@ async def require_valid_access_token(
     non-empty Bearer string to the backend (auth bypass). Validate via
     auth /userinfo before proxying.
     """
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{AUTH_BASE_URL}/userinfo",
-                headers={"Authorization": f"Bearer {access_token}"},
-                timeout=10.0,
-            )
-    except httpx.RequestError:
-        raise HTTPException(status_code=503, detail="Auth service unavailable")
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    return access_token
+    return await fetch_authenticated_user(AUTH_BASE_URL, access_token)
 
 
 @app.get("/health")
@@ -181,11 +188,34 @@ async def me(access_token: str = Depends(get_access_token)):
         )
 
 
+async def _platform_decision(
+    request: Request,
+    user: AuthenticatedUser,
+) -> AccessDecision | None:
+    if not platform_enforced(PLATFORM_BASE_URL):
+        return None
+    tenant_slug = request.headers.get("X-Tenant-Id", "").strip()
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="X-Tenant-Id header is required")
+    decision = await resolve_tenant_access(
+        PLATFORM_BASE_URL,
+        tenant_slug,
+        user.subject,
+        request.method,
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=http_status_for_deny(decision.deny_reason),
+            detail=deny_detail(decision.deny_reason),
+        )
+    return decision
+
+
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_api(
     path: str,
     request: Request,
-    access_token: str = Depends(require_valid_access_token),
+    user: AuthenticatedUser = Depends(require_authenticated_user),
 ):
     """
     Very simple example of gateway → backend proxy with auth.
@@ -203,12 +233,19 @@ async def proxy_api(
     # crashes httpx/h11 when the client sent pretty-printed or spaced JSON.
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
 
+    decision = await _platform_decision(request, user)
+
     headers = {
         k: v
         for k, v in request.headers.items()
         if k.lower() not in _HOP_BY_HOP_HEADERS
+        and k.lower() not in _GATEWAY_INJECTED_HEADERS
     }
-    headers["Authorization"] = f"Bearer {access_token}"
+    headers["Authorization"] = f"Bearer {user.access_token}"
+    if decision and decision.schema_name:
+        headers["X-Tenant-Schema"] = decision.schema_name
+    if decision and decision.role_code:
+        headers["X-Platform-User-Role"] = decision.role_code
 
     async with httpx.AsyncClient() as client:
         resp = await client.request(

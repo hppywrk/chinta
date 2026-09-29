@@ -1,12 +1,26 @@
 """Pure unit tests (no database)."""
 import pytest
 
-from db import tenant_notes_index_name, tenant_schema_name, validate_tenant_id
+from db import (
+    tenant_notes_index_name,
+    tenant_schema_name,
+    validate_tenant_id,
+    validate_tenant_schema,
+)
 
 
 def test_validate_tenant_id_accepts_safe_values():
     assert validate_tenant_id("acme") == "acme"
     assert validate_tenant_id("t1.dev") == "t1.dev"
+
+
+def test_validate_tenant_schema_accepts_platform_names():
+    assert validate_tenant_schema("t_abc123def") == "t_abc123def"
+
+
+def test_validate_tenant_schema_rejects_unsafe():
+    with pytest.raises(ValueError):
+        validate_tenant_schema("public")
 
 
 def test_validate_tenant_id_rejects_empty():

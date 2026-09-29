@@ -42,6 +42,7 @@ def gateway_url():
 
     gateway_app.AUTH_BASE_URL = auth_base
     gateway_app.BACKEND_URL = f"http://127.0.0.1:{backend_port}"
+    gateway_app.PLATFORM_BASE_URL = ""
 
     gateway = HTTPServer(("127.0.0.1", 0), None)  # just to allocate a port
     gateway_port = gateway.server_address[1]

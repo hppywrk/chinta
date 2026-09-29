@@ -60,12 +60,14 @@ services:
     depends_on:
       - chinta-auth
       - chinta-backend
+      - chinta-platform
     env_file:
       - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
         required: false
     environment:
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
+      CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
       CHINTA_AUTH_CALLBACK_URL: ${CHINTA_AUTH_CALLBACK_URL:-http://localhost:8084/auth/callback}
       CHINTA_GATEWAY_PORT: "8084"
     networks:
@@ -105,6 +107,7 @@ services:
       CHINTA_DB_USER: chinta_user
       CHINTA_DB_PASSWORD: chinta_password
       CHINTA_AUTH_URL: http://chinta-auth:8083
+      CHINTA_ENFORCE_PLATFORM: ${CHINTA_ENFORCE_PLATFORM:-1}
     networks:
       - chinta-network
 

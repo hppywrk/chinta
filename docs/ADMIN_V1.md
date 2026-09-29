@@ -99,8 +99,8 @@ chinta-admin tenant create --slug demo --name "Demo" --owner-user-id "<uuid from
 | `docs/ADMIN_V1.md` | This file |
 | `chinta-platform` service skeleton | Health, admin auth, OpenAPI; store wired when DDL present |
 | `chinta-admin` CLI | Commands above |
-| Gateway resolve middleware | Backlog (after platform store stable) |
-| Backend `X-Tenant-Schema` | Backlog |
+| Gateway resolve middleware | **Done** (`CHINTA_PLATFORM_URL` on gateway) |
+| Backend `X-Tenant-Schema` + `CHINTA_ENFORCE_PLATFORM` | **Done** (compose defaults enforce on) |
 | Full entitlements / NATS / v2 authz matrix | v2 |
 
 ---

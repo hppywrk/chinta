@@ -6,12 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app as gateway_app
+from userinfo import AuthenticatedUser
 
 
 @pytest.fixture
 def client():
-    gateway_app.app.dependency_overrides[gateway_app.require_valid_access_token] = (
-        lambda: "test-token"
+    gateway_app.PLATFORM_BASE_URL = ""
+    gateway_app.app.dependency_overrides[gateway_app.require_authenticated_user] = (
+        lambda: AuthenticatedUser(access_token="test-token", subject="test-user")
     )
     with TestClient(gateway_app.app) as test_client:
         yield test_client

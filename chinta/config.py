@@ -14,7 +14,11 @@ def get_config() -> dict[str, str]:
     if not database_url:
         database_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
 
+    enforce = os.environ.get("CHINTA_ENFORCE_PLATFORM", "").strip().lower()
+    enforce_platform = enforce in ("1", "true", "yes", "on")
+
     return {
         "database_url": database_url,
         "auth_url": os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083").rstrip("/"),
+        "enforce_platform": enforce_platform,
     }
