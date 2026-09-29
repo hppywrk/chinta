@@ -44,11 +44,14 @@ jobs:
             chinta-auth/requirements.txt
             chinta-gateway/requirements.txt
             chinta/requirements.txt
+            chinta-platform/requirements.txt
+            chinta-admin/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r chinta-auth/requirements.txt -r chinta-gateway/requirements.txt -r chinta/requirements.txt
+          pip install -r chinta-platform/requirements.txt -r chinta-admin/requirements.txt
           pip install pytest
 
       - name: Run unit tests
@@ -59,9 +62,11 @@ jobs:
           cd chinta-auth && pytest -q
           cd ../chinta-gateway && pytest -q
           cd ../chinta && pytest -q test_db_unit.py
+          cd ../chinta-platform && pytest -q
+          cd ../chinta-admin && pytest -q
 
       - name: Byte-compile service code
-        run: python -m compileall -q chinta-auth chinta-gateway chinta
+        run: python -m compileall -q chinta-auth chinta-gateway chinta chinta-platform chinta-admin
 
       - name: Import application modules
         env:
@@ -70,6 +75,7 @@ jobs:
         run: |
           cd chinta-auth && python -c "import app"
           cd ../chinta-gateway && python -c "import app"
+          cd ../chinta-platform && python -c "import app"
 
   chinta-backend:
     name: Chinta backend (PostgreSQL)

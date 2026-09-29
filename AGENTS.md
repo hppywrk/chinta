@@ -9,6 +9,7 @@ Chinta is a multi-tenant microservices project. Operational Python services:
 - **chinta-auth** (port 8083): FastAPI OIDC authentication service
 - **chinta-gateway** (port 8084): FastAPI edge gateway
 - **chinta** / **chinta-backend** (port 8080): FastAPI notes editor API (PostgreSQL, schema-per-tenant)
+- **chinta-platform** (port 8085): FastAPI control plane (tenants, users, memberships; admin token)
 
 The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite. **chinta-net** and root `Dockerfile.chinta` remain experimental (`full-stack` compose profile only).
 
@@ -16,6 +17,8 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 
 - `/chinta-auth`: working Python service (pytest under `chinta-auth/test_*.py`)
 - `/chinta-gateway`: working Python service (`httpx` + `pyyaml` in requirements; pytest under `chinta-gateway/test_*.py`)
+- `/chinta-platform`: control plane service (pytest under `chinta-platform/test_*.py`; apply `chinta-platform/migrations/001_platform_core.sql` to PostgreSQL)
+- `/chinta-admin`: admin CLI (`python chinta-admin/cli.py`; see `docs/ADMIN_V1.md`)
 - `/chinta`: working Python backend (`psycopg`, notes CRUD; pytest under `chinta/test_*.py`)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) for shared catalog; tenant notes live in per-tenant schemas (`t_<sha256-prefix>`) created by the backend
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
@@ -36,6 +39,8 @@ python -m pip install --upgrade pip
 python -m pip install -r /workspace/chinta-auth/requirements.txt
 python -m pip install -r /workspace/chinta-gateway/requirements.txt
 python -m pip install -r /workspace/chinta/requirements.txt
+python -m pip install -r /workspace/chinta-platform/requirements.txt
+python -m pip install -r /workspace/chinta-admin/requirements.txt
 ```
 
 Notes API requires PostgreSQL (e.g. `docker compose up -d chinta-db`).
@@ -69,6 +74,15 @@ cd /workspace/chinta-gateway
 CHINTA_AUTH_URL=http://localhost:8083 CHINTA_BACKEND_URL=http://localhost:8080 CHINTA_GATEWAY_PORT=8084 uvicorn app:app --host 0.0.0.0 --port 8084 --reload
 ```
 
+Start platform service (needs DB + platform DDL):
+
+```bash
+cd /workspace/chinta-platform
+CHINTA_PLATFORM_DATABASE_URL=postgresql://chinta_user:chinta_password@localhost:5432/chinta \
+CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token \
+uvicorn app:app --host 0.0.0.0 --port 8085 --reload
+```
+
 ### Verification
 
 Health checks:
@@ -77,6 +91,7 @@ Health checks:
 curl http://localhost:8083/health  # auth
 curl http://localhost:8084/health  # gateway
 curl http://localhost:8080/health  # backend
+curl http://localhost:8085/health  # platform
 ```
 
 Useful endpoint checks:
