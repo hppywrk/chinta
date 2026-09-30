@@ -71,7 +71,26 @@ Start gateway service:
 
 ```bash
 cd /workspace/chinta-gateway
-CHINTA_AUTH_URL=http://localhost:8083 CHINTA_BACKEND_URL=http://localhost:8080 CHINTA_GATEWAY_PORT=8084 uvicorn app:app --host 0.0.0.0 --port 8084 --reload
+CHINTA_AUTH_URL=http://localhost:8083 CHINTA_BACKEND_URL=http://localhost:8080 \
+CHINTA_PLATFORM_URL=http://localhost:8085 CHINTA_GATEWAY_PORT=8084 \
+uvicorn app:app --host 0.0.0.0 --port 8084 --reload
+```
+
+Backend with platform enforcement (matches docker compose):
+
+```bash
+cd /workspace/chinta
+CHINTA_ENFORCE_PLATFORM=1 CHINTA_DB_HOST=localhost CHINTA_AUTH_URL=http://localhost:8083 \
+uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+```
+
+Start platform service (needs DB + platform DDL):
+
+```bash
+cd /workspace/chinta-platform
+CHINTA_PLATFORM_DATABASE_URL=postgresql://chinta_user:chinta_password@localhost:5432/chinta \
+CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token \
+uvicorn app:app --host 0.0.0.0 --port 8085 --reload
 ```
 
 Start platform service (needs DB + platform DDL):

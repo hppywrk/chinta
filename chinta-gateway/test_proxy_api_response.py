@@ -61,6 +61,7 @@ def gateway_url():
 
     gateway_app.AUTH_BASE_URL = auth_base
     gateway_app.BACKEND_URL = f"http://127.0.0.1:{upstream_port}"
+    gateway_app.PLATFORM_BASE_URL = ""
 
     probe = HTTPServer(("127.0.0.1", 0), None)
     gateway_port = probe.server_address[1]

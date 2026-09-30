@@ -15,13 +15,13 @@ from pydantic import BaseModel, Field
 
 from auth_context import RequestContext, resolve_request_context
 from config import get_config
-from db import NotesStore, validate_tenant_id
+from db import NotesStore, TenantSchemaNotFoundError, validate_tenant_id, validate_tenant_schema
 
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "chinta-openapi.yml"
 
 _cfg = get_config()
-_store = NotesStore(_cfg["database_url"])
+_store = NotesStore(_cfg["database_url"], enforce_platform=_cfg["enforce_platform"])
 _auth_url = _cfg["auth_url"]
 
 app = FastAPI(
@@ -43,9 +43,19 @@ async def get_context(request: Request) -> RequestContext:
     ctx = await resolve_request_context(request, _auth_url)
     try:
         validate_tenant_id(ctx.tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid X-Tenant-Id")
+        if ctx.tenant_schema:
+            validate_tenant_schema(ctx.tenant_schema)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return ctx
+
+
+def _handle_store_errors(exc: Exception) -> None:
+    if isinstance(exc, TenantSchemaNotFoundError):
+        raise HTTPException(status_code=404, detail="Tenant schema not found")
+    if isinstance(exc, ValueError):
+        raise HTTPException(status_code=400, detail=str(exc))
+    raise exc
 
 
 @app.get("/health")
@@ -55,13 +65,19 @@ async def health():
 
 @app.get("/notes")
 async def list_notes(ctx: RequestContext = Depends(get_context)):
-    notes = _store.list_notes(ctx.tenant_id, ctx.user_id)
+    try:
+        notes = _store.list_notes(ctx.tenant_id, ctx.user_id, ctx.tenant_schema)
+    except (TenantSchemaNotFoundError, ValueError) as exc:
+        _handle_store_errors(exc)
     return [n.as_dict() for n in notes]
 
 
 @app.post("/notes", status_code=201)
 async def create_note(payload: NoteCreate, ctx: RequestContext = Depends(get_context)):
-    note = _store.create_note(ctx.tenant_id, ctx.user_id, payload.body)
+    try:
+        note = _store.create_note(ctx.tenant_id, ctx.user_id, payload.body, ctx.tenant_schema)
+    except (TenantSchemaNotFoundError, ValueError) as exc:
+        _handle_store_errors(exc)
     return note.as_dict()
 
 
@@ -71,7 +87,12 @@ async def replace_note(
     payload: NoteReplace,
     ctx: RequestContext = Depends(get_context),
 ):
-    note = _store.replace_note(ctx.tenant_id, ctx.user_id, note_id, payload.body)
+    try:
+        note = _store.replace_note(
+            ctx.tenant_id, ctx.user_id, note_id, payload.body, ctx.tenant_schema
+        )
+    except (TenantSchemaNotFoundError, ValueError) as exc:
+        _handle_store_errors(exc)
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
     return note.as_dict()
@@ -79,7 +100,11 @@ async def replace_note(
 
 @app.delete("/notes/{note_id}", status_code=204)
 async def delete_note(note_id: int, ctx: RequestContext = Depends(get_context)):
-    if not _store.delete_note(ctx.tenant_id, ctx.user_id, note_id):
+    try:
+        deleted = _store.delete_note(ctx.tenant_id, ctx.user_id, note_id, ctx.tenant_schema)
+    except (TenantSchemaNotFoundError, ValueError) as exc:
+        _handle_store_errors(exc)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Note not found")
 
 
