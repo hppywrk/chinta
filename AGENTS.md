@@ -25,7 +25,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/docs`: platform specs (`API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
-- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`; `chinta-net` under `full-stack` profile
+- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`; `chinta-net` under `full-stack` profile
 
 ### Local environment bootstrap
 
@@ -145,7 +145,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 
 - `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
 - Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
-- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`) via `scripts/deploy/vm-deploy.sh`.
+- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`) via `scripts/deploy/vm-deploy.sh`.
 - `Dockerfile.cinta-db` uses `chinta-db/init.sql`.
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
