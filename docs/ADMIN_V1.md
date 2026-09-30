@@ -1,7 +1,7 @@
 # Admin tooling and platform service (v1)
 
 Status: Draft  
-Last updated: 2026-09-29
+Last updated: 2026-09-30
 
 This document is the practical v1 slice for **tenant onboarding**, **platform users**, **memberships**, and a **CLI** that will not be thrown away when entitlements and v2 authz land.
 
@@ -19,8 +19,8 @@ Related specs:
 |--------|------------|
 | **chinta-platform** | HTTP control plane: tenants, users, memberships, `POST /v1/access/resolve` for the gateway. Provisions per-tenant note schemas on tenant create. |
 | **chinta-admin** | Thin CLI over the platform admin API (`CHINTA_PLATFORM_URL`, `CHINTA_PLATFORM_ADMIN_TOKEN`). |
-| **chinta-gateway** | (Next step) After JWT validation, call access resolve; forward `X-Tenant-Schema` to the backend. |
-| **chinta-backend** | (Next step) Prefer `X-Tenant-Schema`; optional `CHINTA_ENFORCE_PLATFORM=1` to stop lazy schema creation. |
+| **chinta-gateway** | When `CHINTA_PLATFORM_URL` is set: JWT validation, access resolve, forward `X-Tenant-Schema` / `X-Platform-User-Role` to the backend. |
+| **chinta-backend** | Honors `X-Tenant-Schema`; `CHINTA_ENFORCE_PLATFORM=1` (compose default) disables lazy schema creation. |
 
 Admin mutations use a **bootstrap admin token**, not end-user OIDC JWTs. User-facing traffic continues to use **chinta-auth**.
 
@@ -76,19 +76,23 @@ export CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token-change-me
 # Apply platform DDL once (see chinta-platform/migrations/001_platform_core.sql)
 psql "$CHINTA_PLATFORM_DATABASE_URL" -f chinta-platform/migrations/001_platform_core.sql
 
-chinta-admin user create --email you@example.com --sub "google-oauth2|…"
-chinta-admin tenant create --slug demo --name "Demo" --owner-user-id "<uuid from user create>"
+python chinta-admin/cli.py user create --email you@example.com --sub "google-oauth2|…"
+python chinta-admin/cli.py tenant create --slug demo --name "Demo" --owner-user-id "<uuid from user create>"
 ```
 
 ---
 
-## Gateway middleware (planned)
+## Gateway middleware
+
+When `CHINTA_PLATFORM_URL` is configured:
 
 1. Require `X-Tenant-Id` on `/api/*`.
 2. Validate JWT via auth `/userinfo` (unchanged).
 3. `POST /v1/access/resolve` with `tenant_slug`, `user_external_subject` (= OIDC `sub`), `module_code=notes`, `operation=read|write`.
-4. On deny → 403 with contract error codes.
-5. Forward to backend: `X-Tenant-Id`, `X-Tenant-Schema`, optional `X-Platform-User-Role`.
+4. On deny → 403/404 with contract error codes.
+5. Forward to backend: `X-Tenant-Id`, `X-Tenant-Schema`, `X-Platform-User-Role` (client-supplied schema headers are stripped).
+
+If `CHINTA_PLATFORM_URL` is unset, gateway `/api` proxy behavior matches the pre-platform passthrough (used in some unit tests).
 
 ---
 
@@ -97,7 +101,7 @@ chinta-admin tenant create --slug demo --name "Demo" --owner-user-id "<uuid from
 | Item | Status |
 |------|--------|
 | `docs/ADMIN_V1.md` | This file |
-| `chinta-platform` service skeleton | Health, admin auth, OpenAPI; store wired when DDL present |
+| `chinta-platform` service | Health, admin auth, OpenAPI; store wired when DDL present |
 | `chinta-admin` CLI | Commands above |
 | Gateway resolve middleware | **Done** (`CHINTA_PLATFORM_URL` on gateway) |
 | Backend `X-Tenant-Schema` + `CHINTA_ENFORCE_PLATFORM` | **Done** (compose defaults enforce on) |
@@ -110,5 +114,5 @@ chinta-admin tenant create --slug demo --name "Demo" --owner-user-id "<uuid from
 1. **B0.1** — Apply `001_platform_core.sql` (or full `CONTROL_PLANE_DDL_V1.sql`) via migration tooling.
 2. **B1.1** — Flesh out platform handlers + tests against PostgreSQL.
 3. **chinta-admin** — Already calls live APIs.
-4. **B_GW.1** (minimal) — Gateway access resolve + headers.
+4. **B_GW.1** (minimal) — Gateway access resolve + headers (**landed**; full entitlements path still backlog).
 5. **B5.1** — Idempotent module migrations on tenant create (notes baseline today).

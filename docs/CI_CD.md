@@ -1,7 +1,7 @@
 # CI/CD (GitHub Actions → VM)
 
 Status: v1  
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 
 This document describes continuous integration on pull requests and manual deployment to a Linux VM.
 
@@ -50,10 +50,11 @@ The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM befor
 |---------|------------------|--------|
 | `chinta-db` | yes | Postgres image from `Dockerfile.cinta-db` |
 | `chinta-auth` | yes | Built from `chinta-auth/Dockerfile` |
+| `chinta-backend` | yes | Notes API (`chinta/Dockerfile`); required for `/api/notes` |
 | `chinta-gateway` | yes | Built from `chinta-gateway/Dockerfile` |
-| `chinta-backend`, `chinta-net` | `full-stack` profile only | Not deployed in v1 |
+| `chinta-net` | `full-stack` profile only | Experimental; not in default CD |
 
-Default service list is in `x-chinta-vm.default_services` and overridable via `CHINTA_COMPOSE_SERVICES` in `/etc/chinta/deploy.env`.
+Default service list is in `x-chinta-vm.default_services` and overridable via `CHINTA_COMPOSE_SERVICES` in `/etc/chinta/deploy.env` (loaded by `vm-deploy.sh` before resolving the service list).
 
 **Boot after reboot:** optional [`chinta-compose.service`](../rootfs/etc/systemd/system/chinta-compose.service) runs the same `docker compose up -d` stack (one systemd unit, all processes in containers).
 
@@ -98,7 +99,7 @@ Local Docker (same compose file):
 
 ```bash
 export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
-docker compose up -d chinta-db chinta-auth chinta-gateway
+docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway
 ```
 
 ### 2.2 GitHub configuration
@@ -135,6 +136,7 @@ The deploy user must be able to:
    ```bash
    docker compose ps
    curl -s http://127.0.0.1:8083/health
+   curl -s http://127.0.0.1:8080/health
    curl -s http://127.0.0.1:8084/health
    ```
 
@@ -147,7 +149,7 @@ The deploy user must be able to:
 | Auto-deploy on push to `main` | Add `push: branches: [main]` with environment protection |
 | Spectral / schemathesis in CI | Backlog **B0.5** |
 | TLS + reverse proxy (Caddy/nginx) | Infra doc or extend this file |
-| `full-stack` profile in CD | When backend/net images build reliably |
+| `full-stack` profile in CD | When `chinta-net` image builds reliably |
 | Staging environment | Second GitHub environment + secrets |
 
 ---

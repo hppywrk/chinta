@@ -96,6 +96,7 @@ Tasks:
 - Resolve tenant context on `/api/*` (not v1 passthrough-only behavior).
 - Call entitlements service on gateway critical path.
 - Propagate `X-Tenant-Id`, `X-Request-Id`, and related headers to backend.
+- **Partial (v1 admin slice):** when `CHINTA_PLATFORM_URL` is set, gateway calls `POST /v1/access/resolve`, requires `X-Tenant-Id` (slug), and forwards `X-Tenant-Schema` / `X-Platform-User-Role` (`docs/ADMIN_V1.md`). Full entitlements service still backlog.
 
 Definition of done:
 - Gateway OpenAPI updated with any new first-class routes or documented middleware behavior.
