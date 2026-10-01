@@ -119,11 +119,26 @@ class NotesStore:
             return cur.fetchone() is not None
 
     def _resolve_schema(self, tenant_id: str, tenant_schema: str | None) -> str:
+        # Schema must always be bound to X-Tenant-Id. Before platform wiring,
+        # schema was derived only from tenant_id; accepting an unbound
+        # X-Tenant-Schema lets a caller with direct backend access write into
+        # another tenant's schema while claiming a different tenant id.
+        expected = tenant_schema_name(tenant_id)
+        expected_aliases = {expected}
+        lowered = tenant_id.lower()
+        if lowered != tenant_id:
+            # Platform slugs are canonicalized to lowercase; gateway may forward
+            # the client's original casing alongside schema_name(slug.lower()).
+            expected_aliases.add(tenant_schema_name(lowered))
+
         if tenant_schema:
-            return validate_tenant_schema(tenant_schema)
+            validated = validate_tenant_schema(tenant_schema)
+            if validated not in expected_aliases:
+                raise ValueError("X-Tenant-Schema does not match X-Tenant-Id")
+            return validated
         if self._enforce_platform:
             raise ValueError("X-Tenant-Schema is required when platform enforcement is enabled")
-        return tenant_schema_name(tenant_id)
+        return expected
 
     def _prepare_schema(self, conn: psycopg.Connection, schema: str) -> None:
         if self._enforce_platform:
