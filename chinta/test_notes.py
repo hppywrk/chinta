@@ -158,5 +158,15 @@ def test_requires_valid_token(client):
     assert r.status_code == 401
 
 
+def test_rejects_spoofed_tenant_schema_header(client):
+    """Direct backend callers must not target another tenant's schema via header."""
+    headers = {
+        **_headers("acme"),
+        "X-Tenant-Schema": tenant_schema_name("other-tenant"),
+    }
+    r = client.post("/notes", json={"body": "cross-tenant"}, headers=headers)
+    assert r.status_code == 400
+
+
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
