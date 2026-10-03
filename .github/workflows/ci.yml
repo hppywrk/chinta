@@ -109,12 +109,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r chinta/requirements.txt pytest
+          pip install -r chinta/requirements.txt -r chinta-platform/requirements.txt pytest
 
       - name: Run integration tests
         env:
           TEST_DATABASE_URL: postgresql://chinta_user:chinta_password@localhost:5432/chinta
-        run: cd chinta && pytest -q
+        run: |
+          cd chinta && pytest -q
+          cd ../chinta-platform && pytest -q test_migrate.py
 
   smoke:
     name: Smoke (auth + gateway)
