@@ -22,8 +22,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # 01 = shared catalog; 02 = platform control-plane (gateway access resolve).
-      - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Platform control-plane DDL (idempotent). Also applied on chinta-platform startup.
       - ./chinta-platform/migrations/001_platform_core.sql:/docker-entrypoint-initdb.d/02_platform_core.sql:ro
     environment:
       POSTGRES_DB: chinta

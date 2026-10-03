@@ -2,9 +2,9 @@
 -- schemas created by chinta-backend (t_<sha256(tenant_id) prefix>; see chinta/db.py).
 --
 -- Platform control-plane DDL (platform.tenants/users/memberships) is applied via
--- docker-compose mount of chinta-platform/migrations/001_platform_core.sql as
--- docker-entrypoint-initdb.d/02_platform_core.sql, and again on chinta-platform
--- startup (see chinta-platform/migrate.py) for existing volumes.
+-- compose mount of chinta-platform/migrations/001_platform_core.sql as
+-- docker-entrypoint-initdb.d/02_platform_core.sql when the DB image runs init scripts,
+-- and on every chinta-platform startup (chinta-platform/migrate.py) for existing volumes.
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
