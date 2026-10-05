@@ -45,7 +45,9 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+      # Public origin for OAuth (gateway :8084). IdP callbacks omit redirect_uri, so
+      # auth falls back to {OIDC_REDIRECT_URI_BASE}/auth/callback on code exchange.
+      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}
     networks:
       - chinta-network
 
@@ -68,7 +70,6 @@ services:
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
-      CHINTA_AUTH_CALLBACK_URL: ${CHINTA_AUTH_CALLBACK_URL:-http://localhost:8084/auth/callback}
       CHINTA_GATEWAY_PORT: "8084"
     networks:
       - chinta-network

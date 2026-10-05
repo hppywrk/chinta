@@ -152,7 +152,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - Backend validates Bearer tokens via auth `/userinfo` and requires `X-Tenant-Id` on every notes request.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
-- For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
+- For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (compose defaults to `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
 
 ### Boundaries
 
