@@ -14,6 +14,28 @@ from schema_naming import tenant_schema_name, validate_slug
 
 _BLOCKED_STATUSES = frozenset({"SUSPENDED", "DEPROVISIONED"})
 _WRITE_ROLES = frozenset({"owner", "admin", "member"})
+_MEMBERSHIP_STATUSES = frozenset({"INVITED", "ACTIVE", "SUSPENDED", "REMOVED"})
+
+
+def would_orphan_last_active_owner(
+    *,
+    existing_role: str | None,
+    existing_status: str | None,
+    new_role: str,
+    new_status: str,
+    active_owner_count: int,
+) -> bool:
+    """Return True if an upsert would leave the tenant with zero ACTIVE owners.
+
+    ``remove_membership`` already blocks deleting the last ACTIVE owner;
+    upsert must apply the same invariant (API_CONTRACTS_V2 §3.2).
+    """
+    was_active_owner = existing_role == "owner" and existing_status == "ACTIVE"
+    will_be_active_owner = new_role == "owner" and new_status == "ACTIVE"
+    if not was_active_owner or will_be_active_owner:
+        return False
+    return active_owner_count <= 1
+
 
 
 @dataclass(frozen=True)
@@ -218,11 +240,43 @@ class PlatformStore:
         self._ensure_ready()
         if role_code not in ("owner", "admin", "member", "viewer"):
             raise api_error(400, "VALIDATION_ERROR", "invalid role_code")
+        if membership_status not in _MEMBERSHIP_STATUSES:
+            raise api_error(400, "VALIDATION_ERROR", "invalid membership_status")
         self.get_tenant(tenant_id)
         self.get_user(user_id)
 
         with self._connection() as conn:
             with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT role_code, membership_status FROM platform.memberships
+                    WHERE tenant_id = %s AND user_id = %s
+                    FOR UPDATE
+                    """,
+                    (tenant_id, user_id),
+                )
+                existing = cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT count(*) AS n FROM platform.memberships
+                    WHERE tenant_id = %s AND role_code = 'owner'
+                      AND membership_status = 'ACTIVE'
+                    """,
+                    (tenant_id,),
+                )
+                active_owners = cur.fetchone()["n"]
+                if would_orphan_last_active_owner(
+                    existing_role=existing["role_code"] if existing else None,
+                    existing_status=existing["membership_status"] if existing else None,
+                    new_role=role_code,
+                    new_status=membership_status,
+                    active_owner_count=active_owners,
+                ):
+                    raise api_error(
+                        409,
+                        "VALIDATION_ERROR",
+                        "Cannot remove the last active owner",
+                    )
                 cur.execute(
                     """
                     INSERT INTO platform.memberships
