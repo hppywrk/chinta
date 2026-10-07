@@ -2,6 +2,7 @@
 import pytest
 
 from db import (
+    evaluate_platform_access,
     NotesStore,
     tenant_notes_index_name,
     tenant_schema_name,
@@ -57,6 +58,77 @@ def test_long_tenant_ids_do_not_collide_after_pg_ident_limit():
     assert s1 != s2
     assert len(s1) <= 63 and len(s2) <= 63
     assert tenant_notes_index_name(s1) != tenant_notes_index_name(s2)
+
+
+def test_evaluate_platform_access_denies_non_member():
+    """Deterministic schema hash must not authorize cross-tenant writes."""
+    schema = tenant_schema_name("acme")
+    assert (
+        evaluate_platform_access(row=None, expected_schema=schema, write=True)
+        == "MEMBERSHIP_NOT_FOUND"
+    )
+
+
+def test_evaluate_platform_access_denies_schema_spoof_by_member():
+    member = {
+        "status": "ACTIVE_SHARED",
+        "schema_name": tenant_schema_name("acme"),
+        "role_code": "member",
+        "membership_status": "ACTIVE",
+    }
+    assert (
+        evaluate_platform_access(
+            row=member,
+            expected_schema=tenant_schema_name("other"),
+            write=True,
+        )
+        == "SCHEMA_MISMATCH"
+    )
+
+
+def test_evaluate_platform_access_denies_viewer_writes():
+    viewer = {
+        "status": "ACTIVE_SHARED",
+        "schema_name": tenant_schema_name("acme"),
+        "role_code": "viewer",
+        "membership_status": "ACTIVE",
+    }
+    schema = tenant_schema_name("acme")
+    assert evaluate_platform_access(row=viewer, expected_schema=schema, write=False) is None
+    assert (
+        evaluate_platform_access(row=viewer, expected_schema=schema, write=True)
+        == "ENTITLEMENT_DENIED"
+    )
+
+
+def test_evaluate_platform_access_allows_member_write():
+    member = {
+        "status": "ACTIVE_SHARED",
+        "schema_name": tenant_schema_name("acme"),
+        "role_code": "member",
+        "membership_status": "ACTIVE",
+    }
+    assert (
+        evaluate_platform_access(
+            row=member, expected_schema=tenant_schema_name("acme"), write=True
+        )
+        is None
+    )
+
+
+def test_evaluate_platform_access_blocks_suspended_tenant():
+    row = {
+        "status": "SUSPENDED",
+        "schema_name": tenant_schema_name("acme"),
+        "role_code": "owner",
+        "membership_status": "ACTIVE",
+    }
+    assert (
+        evaluate_platform_access(
+            row=row, expected_schema=tenant_schema_name("acme"), write=False
+        )
+        == "TENANT_STATUS_BLOCKED"
+    )
 
 
 def test_resolve_schema_rejects_cross_tenant_spoof():
