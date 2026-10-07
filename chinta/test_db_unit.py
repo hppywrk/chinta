@@ -2,6 +2,7 @@
 import pytest
 
 from db import (
+    NotesStore,
     tenant_notes_index_name,
     tenant_schema_name,
     validate_tenant_id,
@@ -56,3 +57,25 @@ def test_long_tenant_ids_do_not_collide_after_pg_ident_limit():
     assert s1 != s2
     assert len(s1) <= 63 and len(s2) <= 63
     assert tenant_notes_index_name(s1) != tenant_notes_index_name(s2)
+
+
+def test_resolve_schema_rejects_cross_tenant_spoof():
+    """X-Tenant-Schema must belong to X-Tenant-Id (backend port is published)."""
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    victim = tenant_schema_name("victim")
+    with pytest.raises(ValueError, match="does not match"):
+        store._resolve_schema("acme", victim)
+
+
+def test_resolve_schema_accepts_matching_and_platform_lowercase_alias():
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    schema = tenant_schema_name("acme")
+    assert store._resolve_schema("acme", schema) == schema
+    # Gateway may forward client casing while platform hashed the lowercased slug.
+    assert store._resolve_schema("Acme", schema) == schema
+
+
+def test_resolve_schema_requires_header_when_enforced():
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    with pytest.raises(ValueError, match="required"):
+        store._resolve_schema("acme", None)
