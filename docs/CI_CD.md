@@ -48,7 +48,7 @@ The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM befor
 
 | Service | Default CD stack | Notes |
 |---------|------------------|--------|
-| `chinta-db` | yes | Postgres image from `Dockerfile.cinta-db` |
+| `chinta-db` | yes | Official `postgres:16` via `Dockerfile.cinta-db` (`POSTGRES_*` + `init.sql`) |
 | `chinta-auth` | yes | Built from `chinta-auth/Dockerfile` |
 | `chinta-backend` | yes | Notes API (`chinta/Dockerfile`); required for `/api/notes` |
 | `chinta-gateway` | yes | Built from `chinta-gateway/Dockerfile` |
