@@ -3,6 +3,7 @@ import pytest
 
 from db import (
     evaluate_platform_access,
+    NotesStore,
     tenant_notes_index_name,
     tenant_schema_name,
     validate_tenant_id,
@@ -128,3 +129,25 @@ def test_evaluate_platform_access_blocks_suspended_tenant():
         )
         == "TENANT_STATUS_BLOCKED"
     )
+
+
+def test_resolve_schema_rejects_cross_tenant_spoof():
+    """X-Tenant-Schema must belong to X-Tenant-Id (backend port is published)."""
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    victim = tenant_schema_name("victim")
+    with pytest.raises(ValueError, match="does not match"):
+        store._resolve_schema("acme", victim)
+
+
+def test_resolve_schema_accepts_matching_and_platform_lowercase_alias():
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    schema = tenant_schema_name("acme")
+    assert store._resolve_schema("acme", schema) == schema
+    # Gateway may forward client casing while platform hashed the lowercased slug.
+    assert store._resolve_schema("Acme", schema) == schema
+
+
+def test_resolve_schema_requires_header_when_enforced():
+    store = NotesStore("postgresql://unused", enforce_platform=True)
+    with pytest.raises(ValueError, match="required"):
+        store._resolve_schema("acme", None)
