@@ -23,6 +23,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Platform control-plane DDL (idempotent). Also applied on chinta-platform startup.
+      - ./chinta-platform/migrations/001_platform_core.sql:/docker-entrypoint-initdb.d/02_platform_core.sql:ro
     environment:
       POSTGRES_DB: chinta
       POSTGRES_USER: chinta_user
@@ -85,7 +87,9 @@ services:
       - chinta-db
     environment:
       CHINTA_PLATFORM_DATABASE_URL: postgresql://chinta_user:chinta_password@chinta-db:5432/chinta
-      CHINTA_PLATFORM_ADMIN_TOKEN: ${CHINTA_PLATFORM_ADMIN_TOKEN:-dev-admin-token}
+      # No insecure compose default: a public :8085 + known token allows granting
+      # membership on any tenant. Set explicitly in deploy.env / local shell.
+      CHINTA_PLATFORM_ADMIN_TOKEN: ${CHINTA_PLATFORM_ADMIN_TOKEN:-}
       CHINTA_PLATFORM_PORT: "8085"
     networks:
       - chinta-network

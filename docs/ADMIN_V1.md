@@ -73,8 +73,8 @@ Global flags: `--platform-url`, `--token`, `--output json|table` (env vars overr
 export CHINTA_PLATFORM_URL=http://localhost:8085
 export CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token-change-me
 
-# Apply platform DDL once (see chinta-platform/migrations/001_platform_core.sql)
-psql "$CHINTA_PLATFORM_DATABASE_URL" -f chinta-platform/migrations/001_platform_core.sql
+# Platform DDL auto-applies on chinta-platform startup (and via compose DB init).
+# Manual apply still works: psql "$CHINTA_PLATFORM_DATABASE_URL" -f chinta-platform/migrations/001_platform_core.sql
 
 python chinta-admin/cli.py user create --email you@example.com --sub "google-oauth2|…"
 python chinta-admin/cli.py tenant create --slug demo --name "Demo" --owner-user-id "<uuid from user create>"
@@ -111,7 +111,7 @@ If `CHINTA_PLATFORM_URL` is unset, gateway `/api` proxy behavior matches the pre
 
 ## Suggested build order
 
-1. **B0.1** — Apply `001_platform_core.sql` (or full `CONTROL_PLANE_DDL_V1.sql`) via migration tooling.
+1. **B0.1** — `001_platform_core.sql` auto-applied on platform startup / compose DB init (manual apply still OK).
 2. **B1.1** — Flesh out platform handlers + tests against PostgreSQL.
 3. **chinta-admin** — Already calls live APIs.
 4. **B_GW.1** (minimal) — Gateway access resolve + headers (**landed**; full entitlements path still backlog).
