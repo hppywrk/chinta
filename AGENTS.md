@@ -17,7 +17,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 
 - `/chinta-auth`: working Python service (pytest under `chinta-auth/test_*.py`)
 - `/chinta-gateway`: working Python service (`httpx` + `pyyaml` in requirements; pytest under `chinta-gateway/test_*.py`)
-- `/chinta-platform`: control plane service (pytest under `chinta-platform/test_*.py`; apply `chinta-platform/migrations/001_platform_core.sql` to PostgreSQL)
+- `/chinta-platform`: control plane service (pytest under `chinta-platform/test_*.py`; DDL via `migrations/001_platform_core.sql`, auto-applied on startup / compose DB init)
 - `/chinta-admin`: admin CLI (`python chinta-admin/cli.py`; see `docs/ADMIN_V1.md`)
 - `/chinta`: working Python backend (`psycopg`, notes CRUD; pytest under `chinta/test_*.py`)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) for shared catalog; tenant notes live in per-tenant schemas (`t_<sha256-prefix>`) created by the backend
@@ -25,7 +25,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/docs`: platform specs (`API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
-- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`; `chinta-net` under `full-stack` profile
+- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`; `chinta-net` under `full-stack` profile
 
 ### Local environment bootstrap
 
@@ -84,7 +84,7 @@ CHINTA_ENFORCE_PLATFORM=1 CHINTA_DB_HOST=localhost CHINTA_AUTH_URL=http://localh
 uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-Start platform service (needs DB + platform DDL):
+Start platform service (needs DB; applies platform DDL on startup):
 
 ```bash
 cd /workspace/chinta-platform
@@ -93,14 +93,8 @@ CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token \
 uvicorn app:app --host 0.0.0.0 --port 8085 --reload
 ```
 
-Start platform service (needs DB + platform DDL):
-
-```bash
-cd /workspace/chinta-platform
-CHINTA_PLATFORM_DATABASE_URL=postgresql://chinta_user:chinta_password@localhost:5432/chinta \
-CHINTA_PLATFORM_ADMIN_TOKEN=dev-admin-token \
-uvicorn app:app --host 0.0.0.0 --port 8085 --reload
-```
+Compose does not default `CHINTA_PLATFORM_ADMIN_TOKEN` (port 8085 is published); set it
+explicitly for admin CLI / local compose.
 
 ### Verification
 
@@ -145,14 +139,14 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 
 - `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
 - Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
-- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`) via `scripts/deploy/vm-deploy.sh`.
+- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`) via `scripts/deploy/vm-deploy.sh`.
 - `Dockerfile.cinta-db` is `FROM postgres:16` and installs `chinta-db/init.sql` into `docker-entrypoint-initdb.d` (honors compose `POSTGRES_*`).
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Backend validates Bearer tokens via auth `/userinfo` and requires `X-Tenant-Id` on every notes request.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
-- For browser OAuth via gateway, set `OIDC_REDIRECT_URI_BASE` to the public origin (e.g. `http://localhost:8084`); callback defaults to `{base}/auth/callback`.
+- For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (compose defaults to `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
 
 ### Boundaries
 

@@ -23,6 +23,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Platform control-plane DDL (idempotent). Also applied on chinta-platform startup.
+      - ./chinta-platform/migrations/001_platform_core.sql:/docker-entrypoint-initdb.d/02_platform_core.sql:ro
     environment:
       POSTGRES_DB: chinta
       POSTGRES_USER: chinta_user
@@ -45,7 +47,9 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8083}
+      # Public origin for OAuth (gateway :8084). IdP callbacks omit redirect_uri, so
+      # auth falls back to {OIDC_REDIRECT_URI_BASE}/auth/callback on code exchange.
+      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}
     networks:
       - chinta-network
 
@@ -68,7 +72,6 @@ services:
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
-      CHINTA_AUTH_CALLBACK_URL: ${CHINTA_AUTH_CALLBACK_URL:-http://localhost:8084/auth/callback}
       CHINTA_GATEWAY_PORT: "8084"
     networks:
       - chinta-network
@@ -85,7 +88,9 @@ services:
       - chinta-db
     environment:
       CHINTA_PLATFORM_DATABASE_URL: postgresql://chinta_user:chinta_password@chinta-db:5432/chinta
-      CHINTA_PLATFORM_ADMIN_TOKEN: ${CHINTA_PLATFORM_ADMIN_TOKEN:-dev-admin-token}
+      # No insecure compose default: a public :8085 + known token allows granting
+      # membership on any tenant. Set explicitly in deploy.env / local shell.
+      CHINTA_PLATFORM_ADMIN_TOKEN: ${CHINTA_PLATFORM_ADMIN_TOKEN:-}
       CHINTA_PLATFORM_PORT: "8085"
     networks:
       - chinta-network

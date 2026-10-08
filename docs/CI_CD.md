@@ -52,6 +52,7 @@ The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM befor
 | `chinta-auth` | yes | Built from `chinta-auth/Dockerfile` |
 | `chinta-backend` | yes | Notes API (`chinta/Dockerfile`); required for `/api/notes` |
 | `chinta-gateway` | yes | Built from `chinta-gateway/Dockerfile` |
+| `chinta-platform` | yes | Control plane; gateway access resolve (`CHINTA_PLATFORM_URL`) |
 | `chinta-net` | `full-stack` profile only | Experimental; not in default CD |
 
 Default service list is in `x-chinta-vm.default_services` and overridable via `CHINTA_COMPOSE_SERVICES` in `/etc/chinta/deploy.env` (loaded by `vm-deploy.sh` before resolving the service list).
@@ -76,7 +77,8 @@ Default service list is in `x-chinta-vm.default_services` and overridable via `C
    sudo mkdir -p /etc/chinta
    sudo cp /opt/chinta/config/deploy.env.example /etc/chinta/deploy.env
    sudo chmod 600 /etc/chinta/deploy.env
-   # Set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, public OIDC_REDIRECT_URI_BASE / CHINTA_AUTH_CALLBACK_URL
+   # Set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and public OIDC_REDIRECT_URI_BASE
+   # (compose defaults OIDC_REDIRECT_URI_BASE to the gateway origin, e.g. http://localhost:8084)
    ```
 
 5. **Optional — start stack on boot:**
@@ -99,7 +101,7 @@ Local Docker (same compose file):
 
 ```bash
 export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
-docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway
+docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform
 ```
 
 ### 2.2 GitHub configuration

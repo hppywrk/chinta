@@ -20,6 +20,43 @@ class TenantSchemaNotFoundError(Exception):
     """Raised when platform enforcement forbids lazy schema creation."""
 
 
+class TenantAccessDenied(Exception):
+    """Raised when platform membership/role checks deny the caller."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
+_BLOCKED_TENANT_STATUSES = frozenset({"SUSPENDED", "DEPROVISIONED"})
+_WRITE_ROLES = frozenset({"owner", "admin", "member"})
+
+
+def evaluate_platform_access(
+    *,
+    row: dict | None,
+    expected_schema: str,
+    write: bool,
+) -> str | None:
+    """Return a deny reason, or None if the platform row allows access.
+
+    Used when CHINTA_ENFORCE_PLATFORM is on so direct backend callers cannot
+    skip gateway membership checks. Schema names are a public hash of the
+    tenant slug, so existence alone is not authorization.
+    """
+    if not row:
+        return "MEMBERSHIP_NOT_FOUND"
+    if row.get("status") in _BLOCKED_TENANT_STATUSES:
+        return "TENANT_STATUS_BLOCKED"
+    if row.get("membership_status") != "ACTIVE":
+        return "MEMBERSHIP_NOT_FOUND"
+    if row.get("schema_name") != expected_schema:
+        return "SCHEMA_MISMATCH"
+    if write and row.get("role_code") not in _WRITE_ROLES:
+        return "ENTITLEMENT_DENIED"
+    return None
+
+
 def validate_tenant_schema(schema: str) -> str:
     schema = schema.strip()
     if not schema or not _SCHEMA_RE.match(schema):
@@ -119,11 +156,66 @@ class NotesStore:
             return cur.fetchone() is not None
 
     def _resolve_schema(self, tenant_id: str, tenant_schema: str | None) -> str:
+        # Schema must always be bound to X-Tenant-Id. Before platform wiring,
+        # schema was derived only from tenant_id; accepting an unbound
+        # X-Tenant-Schema lets a caller with direct backend access write into
+        # another tenant's schema while claiming a different tenant id.
+        expected = tenant_schema_name(tenant_id)
+        expected_aliases = {expected}
+        lowered = tenant_id.lower()
+        if lowered != tenant_id:
+            # Platform slugs are canonicalized to lowercase; gateway may forward
+            # the client's original casing alongside schema_name(slug.lower()).
+            expected_aliases.add(tenant_schema_name(lowered))
+
         if tenant_schema:
-            return validate_tenant_schema(tenant_schema)
+            validated = validate_tenant_schema(tenant_schema)
+            if validated not in expected_aliases:
+                raise ValueError("X-Tenant-Schema does not match X-Tenant-Id")
+            return validated
         if self._enforce_platform:
             raise ValueError("X-Tenant-Schema is required when platform enforcement is enabled")
-        return tenant_schema_name(tenant_id)
+        return expected
+
+    def _assert_platform_access(
+        self,
+        conn: psycopg.Connection,
+        tenant_id: str,
+        user_id: str,
+        schema: str,
+        *,
+        write: bool,
+    ) -> None:
+        """Fail closed on membership/role when platform enforcement is enabled.
+
+        Compose publishes the notes API on :8080 while the gateway is the only
+        place that called /v1/access/resolve. Without this check, any valid
+        Bearer token can write into another tenant's schema by sending that
+        tenant's slug plus the publicly computable schema hash.
+        """
+        slug = tenant_id.strip().lower()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT t.status::text AS status, t.schema_name,
+                           m.role_code, m.membership_status
+                    FROM platform.tenants t
+                    JOIN platform.users u
+                      ON u.external_subject = %s AND u.is_active
+                    JOIN platform.memberships m
+                      ON m.tenant_id = t.id AND m.user_id = u.id
+                    WHERE t.slug = %s
+                    """,
+                    (user_id, slug),
+                )
+                row = cur.fetchone()
+        except psycopg.Error as exc:
+            raise TenantAccessDenied("PLATFORM_UNAVAILABLE") from exc
+
+        reason = evaluate_platform_access(row=row, expected_schema=schema, write=write)
+        if reason:
+            raise TenantAccessDenied(reason)
 
     def _prepare_schema(self, conn: psycopg.Connection, schema: str) -> None:
         if self._enforce_platform:
@@ -137,6 +229,8 @@ class NotesStore:
     ) -> list[Note]:
         schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
+            if self._enforce_platform:
+                self._assert_platform_access(conn, tenant_id, user_id, schema, write=False)
             self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
@@ -158,6 +252,8 @@ class NotesStore:
     ) -> Note:
         schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
+            if self._enforce_platform:
+                self._assert_platform_access(conn, tenant_id, user_id, schema, write=True)
             self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
@@ -184,6 +280,8 @@ class NotesStore:
     ) -> Note | None:
         schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
+            if self._enforce_platform:
+                self._assert_platform_access(conn, tenant_id, user_id, schema, write=True)
             self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
@@ -208,6 +306,8 @@ class NotesStore:
     ) -> bool:
         schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
+            if self._enforce_platform:
+                self._assert_platform_access(conn, tenant_id, user_id, schema, write=True)
             self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
                 cur.execute(
