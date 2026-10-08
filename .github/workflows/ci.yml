@@ -30,6 +30,9 @@ jobs:
       - name: Validate CD default services include backend
         run: bash scripts/deploy/test_vm_deploy_services.sh
 
+      - name: Validate chinta-db Dockerfile uses official Postgres
+        run: bash scripts/deploy/test_db_dockerfile.sh
+
   python-services:
     name: Python services
     runs-on: ubuntu-latest

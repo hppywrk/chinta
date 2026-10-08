@@ -140,7 +140,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
 - Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
 - VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`) via `scripts/deploy/vm-deploy.sh`.
-- `Dockerfile.cinta-db` uses `chinta-db/init.sql`.
+- `Dockerfile.cinta-db` is `FROM postgres:16` and installs `chinta-db/init.sql` into `docker-entrypoint-initdb.d` (honors compose `POSTGRES_*`).
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Backend validates Bearer tokens via auth `/userinfo` and requires `X-Tenant-Id` on every notes request.
