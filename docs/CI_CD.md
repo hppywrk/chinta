@@ -1,9 +1,11 @@
 # CI/CD (GitHub Actions → VM)
 
 Status: v1  
-Last updated: 2026-09-29
+Last updated: 2026-10-08
 
 This document describes continuous integration on pull requests and manual deployment to a Linux VM.
+
+**Local product deploy (Docker Compose on your machine):** `docs/LOCAL_DEPLOY_V1.md` and `docs/PRODUCT_SLICE_V1.md`.
 
 ---
 
