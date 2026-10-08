@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 
 import psycopg
+from fastapi import HTTPException
 from psycopg.rows import dict_row
 
 from errors import api_error
+from migrate import apply_platform_migrations
 from provision import provision_notes_schema
 from schema_naming import tenant_schema_name, validate_slug
 
@@ -55,14 +57,28 @@ class PlatformStore:
                         "SELECT 1 FROM information_schema.tables "
                         "WHERE table_schema = 'platform' AND table_name = 'tenants'"
                     )
-                    if cur.fetchone() is None:
-                        raise api_error(
-                            503,
-                            "PLATFORM_SCHEMA_MISSING",
-                            "Apply chinta-platform/migrations/001_platform_core.sql",
+                    missing = cur.fetchone() is None
+            if missing:
+                # Startup migrate may have been skipped (DB not ready yet); retry once.
+                apply_platform_migrations(self.database_url)
+                with self._connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT 1 FROM information_schema.tables "
+                            "WHERE table_schema = 'platform' AND table_name = 'tenants'"
                         )
+                        if cur.fetchone() is None:
+                            raise api_error(
+                                503,
+                                "PLATFORM_SCHEMA_MISSING",
+                                "Apply chinta-platform/migrations/001_platform_core.sql",
+                            )
+        except HTTPException:
+            raise
         except psycopg.Error as exc:
-            raise api_error(503, "DATABASE_UNAVAILABLE", str(exc))
+            raise api_error(503, "DATABASE_UNAVAILABLE", "database unavailable") from exc
+        except OSError as exc:
+            raise api_error(503, "PLATFORM_SCHEMA_MISSING", str(exc)) from exc
 
     def create_user(
         self,
