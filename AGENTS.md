@@ -144,13 +144,13 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
 - Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
 - VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`) via `scripts/deploy/vm-deploy.sh`.
-- `Dockerfile.cinta-db` is `FROM postgres:16` and installs `chinta-db/init.sql` into `docker-entrypoint-initdb.d` (honors compose `POSTGRES_*`).
+- `Dockerfile.cinta-db` is `FROM postgres:16` and COPY's `chinta-db/init.sql` as `docker-entrypoint-initdb.d/01_init.sql` (honors compose `POSTGRES_*`). Compose must not remount that file (duplicate `CREATE INDEX` aborts first-boot); platform DDL is mounted as `02_platform_core.sql`.
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
 - Backend validates Bearer tokens via auth `/userinfo` and requires `X-Tenant-Id` on every notes request.
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
-- For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (compose defaults to `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
+- For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (auth code default and compose both use `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
 
 ### Boundaries
 
