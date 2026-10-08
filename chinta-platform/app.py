@@ -4,9 +4,11 @@ Interface described in api/platform-openapi.yml and docs/API_CONTRACTS_V1.md.
 """
 from __future__ import annotations
 
+import logging
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, AsyncIterator
 
 import yaml
 from fastapi import Depends, FastAPI
@@ -17,15 +19,33 @@ from pydantic import BaseModel, Field
 from admin_auth import require_admin
 from config import get_config
 from errors import api_error
+from migrate import apply_platform_migrations
 from store import PlatformStore
 
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "platform-openapi.yml"
 
+_log = logging.getLogger("chinta-platform")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Apply platform DDL on startup so gateway /v1/access/resolve is usable."""
+    url = get_config().database_url
+    if url:
+        try:
+            apply_platform_migrations(url)
+        except Exception:
+            # Fail soft: /health stays up; mutating/resolve paths surface 503 via store.
+            _log.exception("Platform DDL apply failed; admin/resolve will return 503 until fixed")
+    yield
+
+
 app = FastAPI(
     title="Chinta Platform API",
     version="1.0.0",
     description="Control plane for tenants, users, and memberships (v1 admin slice)",
+    lifespan=lifespan,
 )
 
 

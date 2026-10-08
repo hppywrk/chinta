@@ -52,6 +52,7 @@ The CD job **copies `vm-deploy.sh` from the selected git ref** onto the VM befor
 | `chinta-auth` | yes | Built from `chinta-auth/Dockerfile` |
 | `chinta-backend` | yes | Notes API (`chinta/Dockerfile`); required for `/api/notes` |
 | `chinta-gateway` | yes | Built from `chinta-gateway/Dockerfile` |
+| `chinta-platform` | yes | Control plane; gateway access resolve (`CHINTA_PLATFORM_URL`) |
 | `chinta-net` | `full-stack` profile only | Experimental; not in default CD |
 
 Default service list is in `x-chinta-vm.default_services` and overridable via `CHINTA_COMPOSE_SERVICES` in `/etc/chinta/deploy.env` (loaded by `vm-deploy.sh` before resolving the service list).
@@ -100,7 +101,7 @@ Local Docker (same compose file):
 
 ```bash
 export OIDC_CLIENT_ID=test OIDC_CLIENT_SECRET=test
-docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway
+docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform
 ```
 
 ### 2.2 GitHub configuration

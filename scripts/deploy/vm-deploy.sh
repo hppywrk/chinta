@@ -7,8 +7,9 @@ GIT_REF="${1:-main}"
 CHINTA_ROOT="${CHINTA_ROOT:-/opt/chinta}"
 DEPLOY_ENV="${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}"
 SYSTEMD_UNIT="chinta-compose.service"
-# Must match docker-compose.yml x-chinta-vm.default_services (notes API lives here).
-DEFAULT_COMPOSE_SERVICES="chinta-db chinta-auth chinta-backend chinta-gateway"
+# Must match docker-compose.yml x-chinta-vm.default_services.
+# Gateway defaults CHINTA_PLATFORM_URL to chinta-platform; omitting it 503s /api.
+DEFAULT_COMPOSE_SERVICES="chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform"
 
 log() { echo "[vm-deploy] $*"; }
 
