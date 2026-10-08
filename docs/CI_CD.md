@@ -77,7 +77,8 @@ Default service list is in `x-chinta-vm.default_services` and overridable via `C
    sudo mkdir -p /etc/chinta
    sudo cp /opt/chinta/config/deploy.env.example /etc/chinta/deploy.env
    sudo chmod 600 /etc/chinta/deploy.env
-   # Set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, public OIDC_REDIRECT_URI_BASE / CHINTA_AUTH_CALLBACK_URL
+   # Set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and public OIDC_REDIRECT_URI_BASE
+   # (compose defaults OIDC_REDIRECT_URI_BASE to the gateway origin, e.g. http://localhost:8084)
    ```
 
 5. **Optional — start stack on boot:**
