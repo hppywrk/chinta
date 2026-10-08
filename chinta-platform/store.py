@@ -263,6 +263,10 @@ class PlatformStore:
 
         with self._connection() as conn:
             with conn.cursor() as cur:
+                # Serialize membership mutations per tenant so concurrent demotions
+                # of different ACTIVE owners cannot both pass the last-owner check
+                # (READ COMMITTED TOCTOU → zero owners; API_CONTRACTS_V2 §3.2).
+                self._lock_tenant(cur, tenant_id)
                 cur.execute(
                     """
                     SELECT role_code, membership_status FROM platform.memberships
@@ -272,15 +276,7 @@ class PlatformStore:
                     (tenant_id, user_id),
                 )
                 existing = cur.fetchone()
-                cur.execute(
-                    """
-                    SELECT count(*) AS n FROM platform.memberships
-                    WHERE tenant_id = %s AND role_code = 'owner'
-                      AND membership_status = 'ACTIVE'
-                    """,
-                    (tenant_id,),
-                )
-                active_owners = cur.fetchone()["n"]
+                active_owners = self._count_active_owners(cur, tenant_id)
                 if would_orphan_last_active_owner(
                     existing_role=existing["role_code"] if existing else None,
                     existing_status=existing["membership_status"] if existing else None,
@@ -319,31 +315,30 @@ class PlatformStore:
         self._ensure_ready()
         with self._connection() as conn:
             with conn.cursor() as cur:
+                self._lock_tenant(cur, tenant_id)
                 cur.execute(
                     """
                     SELECT role_code, membership_status FROM platform.memberships
                     WHERE tenant_id = %s AND user_id = %s
+                    FOR UPDATE
                     """,
                     (tenant_id, user_id),
                 )
                 existing = cur.fetchone()
                 if not existing or existing["membership_status"] == "REMOVED":
                     raise api_error(404, "MEMBERSHIP_NOT_FOUND", "Membership not found")
-                if existing["role_code"] == "owner":
-                    cur.execute(
-                        """
-                        SELECT count(*) AS n FROM platform.memberships
-                        WHERE tenant_id = %s AND role_code = 'owner'
-                          AND membership_status = 'ACTIVE'
-                        """,
-                        (tenant_id,),
+                # Only ACTIVE owners count toward the invariant; suspending/removing
+                # a non-ACTIVE owner must not be blocked by the sole ACTIVE owner.
+                if (
+                    existing["role_code"] == "owner"
+                    and existing["membership_status"] == "ACTIVE"
+                    and self._count_active_owners(cur, tenant_id) <= 1
+                ):
+                    raise api_error(
+                        409,
+                        "VALIDATION_ERROR",
+                        "Cannot remove the last active owner",
                     )
-                    if cur.fetchone()["n"] <= 1:
-                        raise api_error(
-                            409,
-                            "VALIDATION_ERROR",
-                            "Cannot remove the last active owner",
-                        )
                 cur.execute(
                     """
                     UPDATE platform.memberships
@@ -431,6 +426,28 @@ class PlatformStore:
             "schema_name": row["schema_name"],
             "role_code": row["role_code"],
         }
+
+    @staticmethod
+    def _lock_tenant(cur: Any, tenant_id: uuid.UUID) -> None:
+        """Row-lock the tenant so membership invariant checks are serialized."""
+        cur.execute(
+            "SELECT id FROM platform.tenants WHERE id = %s FOR UPDATE",
+            (tenant_id,),
+        )
+        if cur.fetchone() is None:
+            raise api_error(404, "TENANT_NOT_FOUND", "Tenant not found")
+
+    @staticmethod
+    def _count_active_owners(cur: Any, tenant_id: uuid.UUID) -> int:
+        cur.execute(
+            """
+            SELECT count(*) AS n FROM platform.memberships
+            WHERE tenant_id = %s AND role_code = 'owner'
+              AND membership_status = 'ACTIVE'
+            """,
+            (tenant_id,),
+        )
+        return int(cur.fetchone()["n"])
 
     @staticmethod
     def _user_row(row: dict[str, Any]) -> dict[str, Any]:
