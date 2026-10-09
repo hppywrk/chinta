@@ -1,9 +1,144 @@
 # Implementation Backlog v1
 
 Status: Draft v1  
-Last updated: 2026-04-03
+Last updated: 2026-10-08
 
-This backlog is ordered for lowest-risk delivery and quickest end-to-end path:
+This file has **two execution tracks**. Use **Track A** for the first deployable product; use **Track B** for long-horizon control-plane and billing work.
+
+| Track | Goal | Spec |
+|-------|------|------|
+| **A — Product slice v1** | Localhost Compose, browser login, notes UI, logging/metrics basics, UT/FT | `docs/PRODUCT_SLICE_V1.md`, `docs/LOCAL_DEPLOY_V1.md` |
+| **B — Control plane expansion** | Registry, entitlements service, billing, NATS, promotion | Sections **0–8** below (original ordering) |
+
+Track A does **not** block on Track B items such as B0.4 (NATS), billing (§7), or B0.2 (repository framework).
+
+---
+
+## Product track (Track A)
+
+Reference: `docs/PRODUCT_SLICE_V1.md` §7. Suggested implementation order: **E0 → E3 → E4/E5 → E1 → E2 → E6 → E7**.
+
+### E0 — Documentation and version alignment
+Priority: P0  
+Dependencies: none
+
+Tasks:
+
+- Maintain `docs/PRODUCT_SLICE_V1.md`, `docs/LOCAL_DEPLOY_V1.md`, `docs/examples/deploy.local.env.example`.
+- Link product track from `AGENTS.md` and `docs/CI_CD.md`.
+
+Definition of done:
+
+- New contributors can find product v1 scope and localhost steps without reading the full control-plane backlog.
+
+### E1 — `chinta-ui` service
+Priority: P0  
+Dependencies: E3 (bootstrap), E2 (compose)
+
+Tasks:
+
+- FastAPI + Jinja2 + static CSS; Dockerfile; port **8086**.
+- Login, session cookie, shell layout, notes page, logout.
+- Browser login completion for OAuth callback (see `PRODUCT_SLICE_V1.md` §F1).
+
+Definition of done:
+
+- Manual browser flow via `http://localhost:8084` creates a note in tenant `demo`.
+
+### E2 — Gateway and Compose integration
+Priority: P0  
+Dependencies: E1
+
+Tasks:
+
+- Add `chinta-ui` to `docker-compose.yml`; set `CHINTA_WEB_URL`.
+- Optional same-origin `/ui` proxy through gateway.
+- Docker `json-file` log rotation on services.
+- Align `scripts/deploy/vm-deploy.sh` default services with `x-chinta-vm.default_services`.
+
+Definition of done:
+
+- `docker compose up` brings UI up; `GET /` redirects to UI.
+
+### E3 — Platform database bootstrap
+Priority: P0  
+Dependencies: none
+
+Tasks:
+
+- Apply `chinta-platform/migrations/001_platform_core.sql` on fresh DB (init script or platform entrypoint).
+- `scripts/seed-demo-tenant.sh` for demo user + tenant.
+
+Definition of done:
+
+- Fresh volume: platform health OK and seed script succeeds without manual `psql`.
+
+### E4 — Structured logging (product subset)
+Priority: P1  
+Dependencies: none
+
+Tasks:
+
+- Shared package (e.g. `packages/chinta_observability`) with JSON formatter and HTTP middleware.
+- Wire into auth, gateway, backend, platform, ui.
+- Env: `CHINTA_LOG_FORMAT`, `CHINTA_LOG_LEVEL`.
+
+Definition of done:
+
+- `docker compose logs` shows parseable JSON; unit test for `request_id` propagation.
+
+### E5 — Metrics and Prometheus
+Priority: P1  
+Dependencies: E4 (optional)
+
+Tasks:
+
+- `GET /metrics` on each Python service.
+- `prometheus` service + `deploy/prometheus.yml` in compose.
+
+Definition of done:
+
+- Prometheus UI shows all scrape targets up locally.
+
+### E6 — Notes list limit
+Priority: P2  
+Dependencies: none
+
+Tasks:
+
+- `GET /notes?limit=` on backend; update `chinta-openapi.yml` and gateway proxy tests if needed.
+
+Definition of done:
+
+- UI can request exactly 10 notes without client-side truncation.
+
+### E7 — Tests (UT + FT)
+Priority: P1  
+Dependencies: E1–E3
+
+Tasks:
+
+- `chinta-ui` pytest in CI.
+- Compose functional test job (health, seed, notes via gateway).
+
+Definition of done:
+
+- CI green on PRs including product FT or documented interim smoke until FT is stable.
+
+### Track A — Explicitly deferred to Track B / v2
+
+| Product v1 skip | Track B / v2 item |
+|-----------------|-------------------|
+| NATS, billing, dedicated promotion | B0.4, §6–7 |
+| Full entitlements service | B_GW.1 (beyond admin access resolve) |
+| Loki/Grafana profile | `IMPLEMENTATION_BACKLOG_V2.md` B8V.3 |
+| Grants matrix | `API_CONTRACTS_V2.md` |
+
+---
+
+## Control plane track (Track B)
+
+Original backlog ordering for lowest-risk delivery and quickest path to full platform:
 
 1) control-plane foundations  
 2) gateway enforcement  

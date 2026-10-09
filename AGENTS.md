@@ -10,8 +10,11 @@ Chinta is a multi-tenant microservices project. Operational Python services:
 - **chinta-gateway** (port 8084): FastAPI edge gateway
 - **chinta** / **chinta-backend** (port 8080): FastAPI notes editor API (PostgreSQL, schema-per-tenant)
 - **chinta-platform** (port 8085): FastAPI control plane (tenants, users, memberships; admin token)
+- **chinta-ui** (port 8086, **planned**): server-rendered web UI (login, app shell, notes module); see `docs/PRODUCT_SLICE_V1.md`
 
 The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite. **chinta-net** and root `Dockerfile.chinta` remain experimental (`full-stack` compose profile only).
+
+**Product v1** scope and localhost Docker deploy: `docs/PRODUCT_SLICE_V1.md`, `docs/LOCAL_DEPLOY_V1.md`, env template `docs/examples/deploy.local.env.example`.
 
 ### Current repository layout (practical view)
 
@@ -22,7 +25,8 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/chinta`: working Python backend (`psycopg`, notes CRUD; pytest under `chinta/test_*.py`)
 - `/chinta-db`: SQL bootstrap file (`init.sql`) for shared catalog; tenant notes live in per-tenant schemas (`t_<sha256-prefix>`) created by the backend
 - `/config`: YAML config samples (`chinta.yml`, `chinta-find.yml`)
-- `/docs`: platform specs (`API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
+- `/docs`: platform specs (`PRODUCT_SLICE_V1.md`, `LOCAL_DEPLOY_V1.md`, `API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
+- `/docs/examples`: `deploy.local.env.example` for Compose on localhost
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
 - `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`; `chinta-net` under `full-stack` profile
