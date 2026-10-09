@@ -22,7 +22,7 @@ def client(monkeypatch):
 
 
 def test_default_redirect_uri_matches_callback_route(monkeypatch):
-    monkeypatch.setenv("OIDC_REDIRECT_URI_BASE", "http://localhost:8084")
+    monkeypatch.delenv("OIDC_REDIRECT_URI_BASE", raising=False)
     assert auth_app.default_redirect_uri() == "http://localhost:8084/auth/callback"
 
 

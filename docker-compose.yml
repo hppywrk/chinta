@@ -22,7 +22,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./chinta-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Catalog DDL is COPY'd into the image as 01_init.sql (Dockerfile.cinta-db).
+      # Do NOT also mount chinta-db/init.sql here: a second apply re-runs bare
+      # CREATE INDEX and aborts first-boot init on every fresh volume.
       # Platform control-plane DDL (idempotent). Also applied on chinta-platform startup.
       - ./chinta-platform/migrations/001_platform_core.sql:/docker-entrypoint-initdb.d/02_platform_core.sql:ro
     environment:

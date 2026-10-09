@@ -21,4 +21,10 @@ grep -q 'POSTGRES_PASSWORD: chinta_password' "${COMPOSE}" || fail "compose missi
 # Volume must map to official image PGDATA (not Ubuntu package cluster path).
 grep -q 'postgres_data:/var/lib/postgresql/data' "${COMPOSE}" || fail "compose volume must target /var/lib/postgresql/data"
 
+# Image already COPY's init.sql as 01_init.sql. Remounting the same file as
+# init.sql re-runs bare CREATE INDEX and aborts first-boot on fresh volumes.
+if grep -q 'chinta-db/init.sql:/docker-entrypoint-initdb.d' "${COMPOSE}"; then
+  fail "compose must not remount chinta-db/init.sql (already in image as 01_init.sql)"
+fi
+
 echo "OK: chinta-db Dockerfile uses official Postgres entrypoint contract"
