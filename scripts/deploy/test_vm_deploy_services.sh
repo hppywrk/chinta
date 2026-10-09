@@ -43,4 +43,13 @@ COMPOSE_SERVICES="${CHINTA_COMPOSE_SERVICES:-$DEFAULT_STACK}"
 [[ "${COMPOSE_SERVICES}" == *chinta-backend* ]] || fail "default stack missing chinta-backend"
 [[ "${COMPOSE_SERVICES}" == *chinta-platform* ]] || fail "default stack missing chinta-platform"
 
+# systemd must not pass a mandatory docker compose --env-file. vm-deploy restarts
+# the unit after compose up; if the file is missing, ExecStop tears the stack down
+# and ExecStart fails — leaving auth/gateway/backend unreachable.
+if grep -qE 'ExecStart=.*--env-file' "${UNIT}"; then
+  fail "chinta-compose.service ExecStart must not require --env-file (use EnvironmentFile=-)"
+fi
+grep -q 'EnvironmentFile=-/etc/chinta/deploy.env' "${UNIT}" \
+  || fail "chinta-compose.service must use optional EnvironmentFile=-"
+
 echo "OK: deploy service defaults and deploy.env override order"

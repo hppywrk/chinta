@@ -19,7 +19,9 @@ services:
     container_name: chinta-db
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # Localhost only: hardcoded compose credentials must not be reachable
+      # from the VM network (vm-deploy uses this same compose file).
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Catalog DDL is COPY'd into the image as 01_init.sql (Dockerfile.cinta-db).
@@ -41,7 +43,8 @@ services:
     container_name: chinta-auth
     restart: unless-stopped
     ports:
-      - "8083:8083"
+      # Auth is reached via docker DNS from the gateway; host bind is for local probes only.
+      - "127.0.0.1:8083:8083"
     env_file:
       - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
         required: false
@@ -85,7 +88,9 @@ services:
     container_name: chinta-platform
     restart: unless-stopped
     ports:
-      - "8085:8085"
+      # Unauthenticated POST /v1/access/resolve must not be internet-reachable.
+      # Admin CLI and local probes use localhost; gateway uses docker DNS.
+      - "127.0.0.1:8085:8085"
     depends_on:
       - chinta-db
     environment:
@@ -104,7 +109,9 @@ services:
     container_name: chinta-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # Notes API is meant to be reached via gateway; keep host bind loopback-only
+      # so a mis-set CHINTA_ENFORCE_PLATFORM cannot be probed from the network.
+      - "127.0.0.1:8080:8080"
     depends_on:
       - chinta-db
     environment:

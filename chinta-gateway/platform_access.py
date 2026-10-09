@@ -62,8 +62,10 @@ async def resolve_tenant_access(
     except ValueError:
         raise HTTPException(status_code=502, detail="Platform returned non-JSON access decision")
 
+    # Require a JSON boolean true. bool("false") is True in Python and would
+    # fail open if an upstream ever stringified the field.
     return AccessDecision(
-        allowed=bool(data.get("allowed")),
+        allowed=data.get("allowed") is True,
         deny_reason=data.get("deny_reason"),
         tenant_id=data.get("tenant_id"),
         tenant_status=data.get("tenant_status"),

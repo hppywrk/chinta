@@ -21,6 +21,12 @@ grep -q 'POSTGRES_PASSWORD: chinta_password' "${COMPOSE}" || fail "compose missi
 # Volume must map to official image PGDATA (not Ubuntu package cluster path).
 grep -q 'postgres_data:/var/lib/postgresql/data' "${COMPOSE}" || fail "compose volume must target /var/lib/postgresql/data"
 
+# Hardcoded DB password must not be published on all interfaces (VM CD path).
+if grep -qE '^\s*-\s*"5432:5432"' "${COMPOSE}"; then
+  fail "compose must bind Postgres to 127.0.0.1:5432, not 0.0.0.0:5432"
+fi
+grep -q '127.0.0.1:5432:5432' "${COMPOSE}" || fail "compose missing localhost Postgres bind"
+
 # Image already COPY's init.sql as 01_init.sql. Remounting the same file as
 # init.sql re-runs bare CREATE INDEX and aborts first-boot on fresh volumes.
 if grep -q 'chinta-db/init.sql:/docker-entrypoint-initdb.d' "${COMPOSE}"; then
