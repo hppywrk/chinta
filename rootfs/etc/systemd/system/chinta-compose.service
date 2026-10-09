@@ -9,9 +9,13 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/chinta
+# Optional: when present, vars are exported into this unit's environment so
+# compose can interpolate ${OIDC_*} / ${CHINTA_*}. Do NOT pass a mandatory
+# `docker compose --env-file` here — a missing file makes ExecStart fail after
+# ExecStop already tore the stack down (vm-deploy restart → all services down).
 EnvironmentFile=-/etc/chinta/deploy.env
 Environment=CHINTA_DEPLOY_ENV=/etc/chinta/deploy.env
-ExecStart=/usr/bin/docker compose --env-file /etc/chinta/deploy.env up -d chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform
+ExecStart=/usr/bin/docker compose up -d chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform
 ExecStop=/usr/bin/docker compose stop chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform
 TimeoutStartSec=600
 
