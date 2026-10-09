@@ -166,4 +166,5 @@ jobs:
           curl -sf http://127.0.0.1:8084/health
           curl -sf http://127.0.0.1:8083/openapi.yaml | head -1 | grep -q '^openapi:'
           curl -sf http://127.0.0.1:8084/openapi.yaml | head -1 | grep -q '^openapi:'
-          curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8084/me | grep -q '401'
+          # Do not use -f: /me returns 401 by design; -f would make curl exit 22.
+          curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8084/me | grep -q '401'
