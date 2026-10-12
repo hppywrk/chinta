@@ -132,3 +132,38 @@ def test_platform_enforced_requires_tenant_header(gateway_with_platform):
         timeout=5,
     )
     assert resp.status_code == 400
+
+
+def test_resolve_tenant_access_requires_json_boolean_true():
+    """Stringified allowed values must not fail open (bool(\"false\") is True)."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import platform_access as pa
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "allowed": "false",
+        "deny_reason": None,
+        "tenant_id": "t",
+        "tenant_status": "ACTIVE_SHARED",
+        "schema_name": "t_abc",
+        "role_code": "owner",
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock(return_value=mock_resp)
+
+    with patch.object(pa.httpx, "AsyncClient", return_value=mock_client):
+        decision = asyncio.run(
+            pa.resolve_tenant_access(
+                "http://platform",
+                "demo",
+                "user-1",
+                "GET",
+            )
+        )
+    assert decision.allowed is False

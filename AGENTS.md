@@ -151,6 +151,9 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
 - For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (auth code default and compose both use `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
+- Compose binds Postgres (`5432`), auth (`8083`), backend (`8080`), and platform (`8085`) to `127.0.0.1` only; gateway (`8084`) remains the public edge. Platform `POST /v1/access/resolve` is unauthenticated by design — do not publish `:8085` on `0.0.0.0`.
+- `chinta-compose.service` must not pass a mandatory `docker compose --env-file`; a missing `/etc/chinta/deploy.env` would stop the stack on systemd restart after `vm-deploy.sh`. Optional vars come from `EnvironmentFile=-`.
+- Auth `/userinfo` rejects access tokens whose `azp`/`aud` (introspection, JWT claims, or Google tokeninfo) does not include `OIDC_CLIENT_ID`, to block cross-app IdP token reuse.
 
 ### Boundaries
 
