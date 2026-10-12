@@ -225,7 +225,12 @@ class NotesStore:
         self._ensure_schema(conn, schema)
 
     def list_notes(
-        self, tenant_id: str, user_id: str, tenant_schema: str | None = None
+        self,
+        tenant_id: str,
+        user_id: str,
+        tenant_schema: str | None = None,
+        *,
+        limit: int | None = None,
     ) -> list[Note]:
         schema = self._resolve_schema(tenant_id, tenant_schema)
         with self._connection() as conn:
@@ -233,17 +238,19 @@ class NotesStore:
                 self._assert_platform_access(conn, tenant_id, user_id, schema, write=False)
             self._prepare_schema(conn, schema)
             with conn.cursor() as cur:
-                cur.execute(
-                    sql.SQL(
-                        """
-                        SELECT id, body, modified_at
-                        FROM {}.notes
-                        WHERE user_id = %s
-                        ORDER BY modified_at DESC, id DESC
-                        """
-                    ).format(sql.Identifier(schema)),
-                    (user_id,),
-                )
+                query = sql.SQL(
+                    """
+                    SELECT id, body, modified_at
+                    FROM {}.notes
+                    WHERE user_id = %s
+                    ORDER BY modified_at DESC, id DESC
+                    """
+                ).format(sql.Identifier(schema))
+                if limit is not None:
+                    query = sql.SQL("{} LIMIT %s").format(query)
+                    cur.execute(query, (user_id, limit))
+                else:
+                    cur.execute(query, (user_id,))
                 rows = cur.fetchall()
         return [Note(id=r["id"], body=r["body"], modified_at=r["modified_at"]) for r in rows]
 

@@ -1,0 +1,13 @@
+openapi: 3.0.0
+info:
+  title: Chinta UI
+  version: 1.0.0
+  description: Server-rendered web UI (login, app shell, notes). Served behind the gateway at /ui.
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service is up

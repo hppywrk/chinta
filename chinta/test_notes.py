@@ -148,6 +148,21 @@ def test_normalized_tenant_ids_do_not_share_notes(client):
     assert any(n["id"] == note_id for n in r.json())
 
 
+def test_list_notes_limit(client, store):
+    tenant = "limit-tenant"
+    for i in range(12):
+        r = client.post("/notes", json={"body": f"n{i}"}, headers=_headers(tenant))
+        assert r.status_code == 201
+
+    r = client.get("/notes", params={"limit": 10}, headers=_headers(tenant))
+    assert r.status_code == 200
+    assert len(r.json()) == 10
+
+    r = client.get("/notes", headers=_headers(tenant))
+    assert r.status_code == 200
+    assert len(r.json()) >= 12
+
+
 def test_requires_tenant_header(client):
     r = client.get("/notes", headers={"Authorization": "Bearer good-token"})
     assert r.status_code == 400

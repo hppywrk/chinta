@@ -24,6 +24,14 @@ paths:
       summary: List the current user's notes in the tenant
       parameters:
         - $ref: '#/components/parameters/TenantIdHeader'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Maximum number of notes to return (most recently modified first)
       security:
         - bearerAuth: []
       responses:

@@ -34,10 +34,13 @@ app = FastAPI(
 security = HTTPBearer(auto_error=False)
 
 AUTH_BASE_URL = os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083")
-WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://chinta-web:8000")
-MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", "http://chinta-web:8000/m")
+WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://localhost:8084/ui")
+MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", WEB_UI_URL)
+UI_INTERNAL_URL = os.environ.get("CHINTA_UI_URL", "http://chinta-ui:8086").rstrip("/")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
 PLATFORM_BASE_URL = os.environ.get("CHINTA_PLATFORM_URL", "").strip()
+PUBLIC_BASE_URL = os.environ.get("OIDC_REDIRECT_URI_BASE", "http://localhost:8084").rstrip("/")
+SESSION_COOKIE_NAME = os.environ.get("CHINTA_SESSION_COOKIE", "chinta_access_token")
 
 # Headers set by the gateway; clients must not spoof them on /api.
 _GATEWAY_INJECTED_HEADERS = frozenset(
@@ -112,16 +115,59 @@ async def root(request: Request):
     return RedirectResponse(WEB_UI_URL)
 
 
-@app.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def proxy_auth(request: Request, path: str):
+@app.get("/auth/callback")
+async def browser_auth_callback(
+    request: Request,
+    code: str,
+    state: str | None = None,
+    redirect_uri: str | None = None,
+):
     """
-    Blind proxy to the auth service. Gateway does not interpret auth semantics;
-    it only forwards requests and responses. Authentication flow (login, callback,
-    token exchange) is entirely owned by the auth service.
+    Browser OAuth completion: exchange code via auth, set httpOnly session cookie,
+    redirect into the web UI. API clients should call auth :8083 directly for JSON.
     """
+    if request.query_params.get("format") == "json":
+        return await _proxy_auth_request(request, "callback")
+
+    redirect = redirect_uri or f"{PUBLIC_BASE_URL}/auth/callback"
+    params = {"code": code, "redirect_uri": redirect}
+    if state is not None:
+        params["state"] = state
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{AUTH_BASE_URL}/auth/callback",
+            params=params,
+            timeout=15.0,
+        )
+    if resp.status_code != 200:
+        try:
+            detail = resp.json()
+        except ValueError:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    try:
+        token_data = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Auth returned non-JSON token response")
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=502, detail="Auth response missing access_token")
+
+    target = WEB_UI_URL.rstrip("/") + "/app"
+    response = RedirectResponse(url=target, status_code=302)
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        access_token,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+async def _proxy_auth_request(request: Request, path: str) -> Response:
     url = f"{AUTH_BASE_URL}/auth/{path}"
     method = request.method
-    # Preserve repeated keys (dict(query_params) keeps only the last value).
     params = list(request.query_params.multi_items())
     body = await request.body() if method in ("POST", "PUT", "PATCH") else None
     headers = {
@@ -137,6 +183,52 @@ async def proxy_auth(request: Request, path: str):
             content=body,
             headers=headers,
             timeout=10.0,
+        )
+    response_headers = {
+        k: v
+        for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers=response_headers,
+        media_type=resp.headers.get("content-type"),
+    )
+
+
+@app.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_auth(request: Request, path: str):
+    """
+    Blind proxy to the auth service. Gateway does not interpret auth semantics;
+    it only forwards requests and responses. Authentication flow (login, callback,
+    token exchange) is entirely owned by the auth service.
+    """
+    return await _proxy_auth_request(request, path)
+
+
+@app.api_route("/ui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+@app.api_route("/ui", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_ui(request: Request, path: str = ""):
+    """Same-origin proxy to chinta-ui (session cookies use gateway host)."""
+    suffix = path.strip("/")
+    url = f"{UI_INTERNAL_URL}/{suffix}" if suffix else f"{UI_INTERNAL_URL}/"
+    method = request.method
+    params = list(request.query_params.multi_items())
+    body = await request.body() if method in ("POST", "PUT", "PATCH") else None
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.request(
+            method,
+            url,
+            params=params,
+            content=body,
+            headers=headers,
+            timeout=30.0,
         )
     response_headers = {
         k: v

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Sign in — {{ company_name }}{% endblock %}
+{% block body %}
+<main class="shell-main">
+  <div class="card login-card">
+    <h1>{{ company_name }}</h1>
+    <p class="muted">Sign in to continue to Notes.</p>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <p><a class="btn" href="{{ url('/auth/start') }}">Sign in</a></p>
+  </div>
+</main>
+{% endblock %}
