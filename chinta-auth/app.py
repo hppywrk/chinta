@@ -23,7 +23,12 @@ _TOKEN_RESPONSE_HEADERS = {
     "Pragma": "no-cache",
 }
 
+from chinta_observability import configure_logging, install_request_logging
+
 from config import get_config
+
+SERVICE_NAME = "chinta-auth"
+configure_logging(SERVICE_NAME)
 
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "auth-openapi.yml"
@@ -33,6 +38,7 @@ app = FastAPI(
     version="1.0.0",
     description="OpenID Connect authentication service",
 )
+install_request_logging(app, SERVICE_NAME)
 
 security = HTTPBearer(auto_error=False)
 

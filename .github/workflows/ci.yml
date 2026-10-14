@@ -54,17 +54,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r chinta-auth/requirements.txt -r chinta-gateway/requirements.txt -r chinta/requirements.txt
-          pip install -r chinta-platform/requirements.txt -r chinta-admin/requirements.txt
-          pip install -r chinta-ui/requirements.txt
           pip install pytest
+          pip install -e "packages/chinta_observability[dev]"
+          for svc in chinta-auth chinta-gateway chinta chinta-platform chinta-admin chinta-ui; do
+            (cd "$svc" && pip install -r requirements.txt)
+          done
 
       - name: Run unit tests
         env:
           OIDC_CLIENT_ID: ci
           OIDC_CLIENT_SECRET: ci
         run: |
-          cd chinta-auth && pytest -q
+          cd packages/chinta_observability && pytest -q
+          cd ../../chinta-auth && pytest -q
           cd ../chinta-gateway && pytest -q
           cd ../chinta && pytest -q test_db_unit.py
           cd ../chinta-platform && pytest -q
@@ -72,7 +74,7 @@ jobs:
           cd ../chinta-ui && pytest -q
 
       - name: Byte-compile service code
-        run: python -m compileall -q chinta-auth chinta-gateway chinta chinta-platform chinta-admin chinta-ui
+        run: python -m compileall -q packages/chinta_observability chinta-auth chinta-gateway chinta chinta-platform chinta-admin chinta-ui
 
       - name: Import application modules
         env:
@@ -116,7 +118,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r chinta/requirements.txt -r chinta-platform/requirements.txt pytest
+          pip install pytest
+          pip install -e packages/chinta_observability
+          (cd chinta && pip install -r requirements.txt)
+          (cd chinta-platform && pip install -r requirements.txt)
 
       - name: Run integration tests
         env:
@@ -146,7 +151,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r chinta-auth/requirements.txt -r chinta-gateway/requirements.txt
+          pip install -e packages/chinta_observability
+          (cd chinta-auth && pip install -r requirements.txt)
+          (cd chinta-gateway && pip install -r requirements.txt)
 
       - name: Start services and probe endpoints
         env:

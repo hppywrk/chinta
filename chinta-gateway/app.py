@@ -20,7 +20,11 @@ from platform_access import (
     platform_enforced,
     resolve_tenant_access,
 )
+from chinta_observability import configure_logging, install_request_logging
 from userinfo import AuthenticatedUser, fetch_authenticated_user
+
+SERVICE_NAME = "chinta-gateway"
+configure_logging(SERVICE_NAME)
 
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "gateway-openapi.yml"
@@ -30,6 +34,7 @@ app = FastAPI(
     version="1.0.0",
     description="Edge gateway in front of internal Chinta services",
 )
+install_request_logging(app, SERVICE_NAME)
 
 security = HTTPBearer(auto_error=False)
 

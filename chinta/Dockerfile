@@ -1,11 +1,11 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY requirements.txt .
+COPY packages/chinta_observability packages/chinta_observability
+COPY chinta chinta
+WORKDIR /workspace/chinta
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
 ENV CHINTA_BACKEND_PORT=8080
 
 EXPOSE 8080

@@ -16,6 +16,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
+from chinta_observability import configure_logging, install_request_logging
+
 from admin_auth import require_admin
 from config import get_config
 from errors import api_error
@@ -25,7 +27,8 @@ from store import PlatformStore
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "platform-openapi.yml"
 
-_log = logging.getLogger("chinta-platform")
+SERVICE_NAME = "chinta-platform"
+_log = configure_logging(SERVICE_NAME)
 
 
 @asynccontextmanager
@@ -47,6 +50,7 @@ app = FastAPI(
     description="Control plane for tenants, users, and memberships (v1 admin slice)",
     lifespan=lifespan,
 )
+install_request_logging(app, SERVICE_NAME)
 
 
 def get_store() -> PlatformStore:
