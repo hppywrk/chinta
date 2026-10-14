@@ -13,7 +13,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from chinta_observability import configure_logging, install_request_logging
+from chinta_observability import configure_logging, install_metrics, install_request_logging
 
 from auth_context import RequestContext, resolve_request_context
 from config import get_config
@@ -41,6 +41,7 @@ app = FastAPI(
     description="Multi-tenant notes editor backend",
 )
 install_request_logging(app, SERVICE_NAME)
+install_metrics(app, SERVICE_NAME)
 
 
 class NoteCreate(BaseModel):

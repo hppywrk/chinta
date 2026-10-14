@@ -16,7 +16,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from chinta_observability import configure_logging, install_request_logging
+from chinta_observability import configure_logging, install_metrics, install_request_logging
 
 from admin_auth import require_admin
 from config import get_config
@@ -51,6 +51,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 install_request_logging(app, SERVICE_NAME)
+install_metrics(app, SERVICE_NAME)
 
 
 def get_store() -> PlatformStore:

@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from chinta_observability import configure_logging, install_request_logging
+from chinta_observability import configure_logging, install_metrics, install_request_logging
 
 from config import get_config
 from gateway_client import GatewayError, create_note, fetch_me, list_notes
@@ -25,6 +25,7 @@ configure_logging(SERVICE_NAME)
 
 app = FastAPI(title="Chinta UI", version="1.0.0")
 install_request_logging(app, SERVICE_NAME)
+install_metrics(app, SERVICE_NAME)
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
