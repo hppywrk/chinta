@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -73,10 +73,21 @@ async def health():
     return {"status": "ok"}
 
 
+_NOTES_LIST_MAX = int(os.environ.get("CHINTA_NOTES_LIST_MAX", "100"))
+
+
 @app.get("/notes")
-async def list_notes(ctx: RequestContext = Depends(get_context)):
+async def list_notes(
+    ctx: RequestContext = Depends(get_context),
+    limit: int | None = Query(default=None, ge=1, le=_NOTES_LIST_MAX),
+):
     try:
-        notes = _store.list_notes(ctx.tenant_id, ctx.user_id, ctx.tenant_schema)
+        notes = _store.list_notes(
+            ctx.tenant_id,
+            ctx.user_id,
+            ctx.tenant_schema,
+            limit=limit,
+        )
     except (TenantAccessDenied, TenantSchemaNotFoundError, ValueError) as exc:
         _handle_store_errors(exc)
     return [n.as_dict() for n in notes]

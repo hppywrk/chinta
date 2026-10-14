@@ -10,7 +10,7 @@ Chinta is a multi-tenant microservices project. Operational Python services:
 - **chinta-gateway** (port 8084): FastAPI edge gateway
 - **chinta** / **chinta-backend** (port 8080): FastAPI notes editor API (PostgreSQL, schema-per-tenant)
 - **chinta-platform** (port 8085): FastAPI control plane (tenants, users, memberships; admin token)
-- **chinta-ui** (port 8086, **planned**): server-rendered web UI (login, app shell, notes module); see `docs/PRODUCT_SLICE_V1.md`
+- **chinta-ui** (port 8086): server-rendered web UI (login, app shell, notes module); proxied at gateway `/ui`; see `docs/PRODUCT_SLICE_V1.md`
 
 The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite. **chinta-net** and root `Dockerfile.chinta` remain experimental (`full-stack` compose profile only).
 
@@ -29,7 +29,8 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/docs/examples`: `deploy.local.env.example` for Compose on localhost
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
-- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`; `chinta-net` under `full-stack` profile
+- `/chinta-ui`: web UI service (pytest under `chinta-ui/test_*.py`)
+- `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`; `chinta-net` under `full-stack` profile
 
 ### Local environment bootstrap
 
@@ -45,6 +46,7 @@ python -m pip install -r /workspace/chinta-gateway/requirements.txt
 python -m pip install -r /workspace/chinta/requirements.txt
 python -m pip install -r /workspace/chinta-platform/requirements.txt
 python -m pip install -r /workspace/chinta-admin/requirements.txt
+python -m pip install -r /workspace/chinta-ui/requirements.txt
 ```
 
 Notes API requires PostgreSQL (e.g. `docker compose up -d chinta-db`).
@@ -109,6 +111,7 @@ curl http://localhost:8083/health  # auth
 curl http://localhost:8084/health  # gateway
 curl http://localhost:8080/health  # backend
 curl http://localhost:8085/health  # platform
+curl http://localhost:8086/health  # ui (also http://localhost:8084/ui/health)
 ```
 
 Useful endpoint checks:

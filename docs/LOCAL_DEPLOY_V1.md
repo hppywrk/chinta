@@ -33,8 +33,8 @@ cp docs/examples/deploy.local.env.example .env
 docker compose --env-file .env up -d --build
 ```
 
-Default services today: `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`.  
-*(Planned: `chinta-ui`, optional `prometheus`.)*
+Default services: `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`.  
+*(Optional later: `prometheus`.)*
 
 ---
 
@@ -105,13 +105,13 @@ curl -H "Authorization: Bearer <access_token>" \
 
 ---
 
-## 6) Browser (after chinta-ui lands)
+## 6) Browser
 
-1. Open `http://localhost:8084/` (gateway redirects to UI).
+1. Open `http://localhost:8084/` (gateway redirects to `http://localhost:8084/ui`).
 2. Sign in with your IdP.
 3. Use Notes in the shell; confirm title `CHINTA_COMPANY_NAME: Notes - <your name>`.
 
-Until `chinta-ui` exists, use Swagger at http://localhost:8084/docs and API calls above.
+Swagger remains at http://localhost:8084/docs for API exploration.
 
 ---
 

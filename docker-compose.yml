@@ -3,6 +3,12 @@
 
 name: chinta
 
+x-chinta-logging: &chinta-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-chinta-vm:
   default_services:
     - chinta-db
@@ -10,9 +16,11 @@ x-chinta-vm:
     - chinta-backend
     - chinta-gateway
     - chinta-platform
+    - chinta-ui
 
 services:
   chinta-db:
+    logging: *chinta-logging
     build:
       context: .
       dockerfile: Dockerfile.cinta-db
@@ -37,6 +45,7 @@ services:
       - chinta-network
 
   chinta-auth:
+    logging: *chinta-logging
     build:
       context: ./chinta-auth
       dockerfile: Dockerfile
@@ -59,6 +68,7 @@ services:
       - chinta-network
 
   chinta-gateway:
+    logging: *chinta-logging
     build:
       context: ./chinta-gateway
       dockerfile: Dockerfile
@@ -77,11 +87,15 @@ services:
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
+      CHINTA_UI_URL: ${CHINTA_UI_URL:-http://chinta-ui:8086}
+      CHINTA_WEB_URL: ${CHINTA_WEB_URL:-http://localhost:8084/ui}
+      OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}
       CHINTA_GATEWAY_PORT: "8084"
     networks:
       - chinta-network
 
   chinta-platform:
+    logging: *chinta-logging
     build:
       context: ./chinta-platform
       dockerfile: Dockerfile
@@ -103,6 +117,7 @@ services:
       - chinta-network
 
   chinta-backend:
+    logging: *chinta-logging
     build:
       context: ./chinta
       dockerfile: Dockerfile
@@ -122,6 +137,29 @@ services:
       CHINTA_DB_PASSWORD: chinta_password
       CHINTA_AUTH_URL: http://chinta-auth:8083
       CHINTA_ENFORCE_PLATFORM: ${CHINTA_ENFORCE_PLATFORM:-1}
+    networks:
+      - chinta-network
+
+  chinta-ui:
+    logging: *chinta-logging
+    build:
+      context: ./chinta-ui
+      dockerfile: Dockerfile
+    container_name: chinta-ui
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    depends_on:
+      - chinta-gateway
+      - chinta-auth
+    environment:
+      CHINTA_GATEWAY_URL: http://chinta-gateway:8084
+      CHINTA_AUTH_URL: http://chinta-auth:8083
+      CHINTA_PUBLIC_URL: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}
+      CHINTA_UI_MOUNT_PATH: /ui
+      CHINTA_DEFAULT_TENANT_SLUG: ${CHINTA_DEFAULT_TENANT_SLUG:-demo}
+      CHINTA_COMPANY_NAME: ${CHINTA_COMPANY_NAME:-Chinta}
+      CHINTA_UI_PORT: "8086"
     networks:
       - chinta-network
 

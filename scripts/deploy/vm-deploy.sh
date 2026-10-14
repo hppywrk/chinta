@@ -9,7 +9,7 @@ DEPLOY_ENV="${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}"
 SYSTEMD_UNIT="chinta-compose.service"
 # Must match docker-compose.yml x-chinta-vm.default_services.
 # Gateway defaults CHINTA_PLATFORM_URL to chinta-platform; omitting it 503s /api.
-DEFAULT_COMPOSE_SERVICES="chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform"
+DEFAULT_COMPOSE_SERVICES="chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform chinta-ui"
 
 log() { echo "[vm-deploy] $*"; }
 

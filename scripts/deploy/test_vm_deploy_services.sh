@@ -9,18 +9,18 @@ SCRIPT="${ROOT}/scripts/deploy/vm-deploy.sh"
 UNIT="${ROOT}/rootfs/etc/systemd/system/chinta-compose.service"
 EXAMPLE="${ROOT}/config/deploy.env.example"
 COMPOSE="${ROOT}/docker-compose.yml"
-DEFAULT_STACK="chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform"
+DEFAULT_STACK="chinta-db chinta-auth chinta-backend chinta-gateway chinta-platform chinta-ui"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-for svc in chinta-backend chinta-platform; do
+for svc in chinta-backend chinta-platform chinta-ui; do
   grep -q "${svc}" "${SCRIPT}" || fail "vm-deploy.sh missing ${svc} default"
   grep -q "${svc}" "${UNIT}" || fail "chinta-compose.service missing ${svc}"
   grep -q "${svc}" "${EXAMPLE}" || fail "deploy.env.example missing ${svc}"
 done
 
 # Keep shell defaults aligned with compose catalog annotation.
-for svc in chinta-backend chinta-platform; do
+for svc in chinta-backend chinta-platform chinta-ui; do
   grep -q "${svc}" "${COMPOSE}" || fail "docker-compose.yml missing ${svc}"
 done
 grep -A20 'x-chinta-vm:' "${COMPOSE}" | grep -q 'chinta-platform' \

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block body %}
+<header class="shell-header">
+  <h1>{{ company_name }}: {{ module_name }} — {{ display_name }}</h1>
+  <a class="btn btn-secondary" href="{{ url('/logout') }}">Logout</a>
+</header>
+<main class="shell-main">
+  <div class="card">
+    <h2>Notes</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post" action="{{ url('/notes') }}">
+      <label for="body">New note</label>
+      <textarea id="body" name="body" required placeholder="Write something…"></textarea>
+      <p style="margin-top: 0.75rem"><button class="btn" type="submit">Submit</button></p>
+    </form>
+    {% if notes %}
+    <ul class="note-list">
+      {% for note in notes %}
+      <li>
+        <div>{{ note.body }}</div>
+        <div class="note-meta">{{ note.modified_at }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No notes yet.</p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
