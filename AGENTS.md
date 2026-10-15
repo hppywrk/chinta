@@ -28,6 +28,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/docs`: platform specs (`PRODUCT_SLICE_V1.md`, `LOCAL_DEPLOY_V1.md`, `API_CONTRACTS_V1.md` / `V2`, `IMPLEMENTATION_BACKLOG_V1.md` / `V2`, `LOGGING_OBSERVABILITY_V2.md`, `SPEC_DRIVEN_DEVELOPMENT.md`, `CI_CD.md`, …)
 - `/docs/examples`: `deploy.local.env.example` for Compose on localhost
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
+- `/deploy/prometheus.yml`: scrape config for local `prometheus` compose service (`:9090`)
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
 - `/chinta-ui`: web UI service (pytest under `chinta-ui/test_*.py`)
 - `/packages/chinta_observability`: shared JSON logging + `X-Request-Id` middleware (editable dep in each service `requirements.txt`)
@@ -110,7 +111,10 @@ curl http://localhost:8084/health  # gateway
 curl http://localhost:8080/health  # backend
 curl http://localhost:8085/health  # platform
 curl http://localhost:8086/health  # ui (also http://localhost:8084/ui/health)
+curl http://localhost:8083/metrics  # Prometheus text on each Python service (:8080–:8086)
 ```
+
+Prometheus UI (compose): http://localhost:9090 — all `chinta-*` scrape targets should be **UP**.
 
 Useful endpoint checks:
 

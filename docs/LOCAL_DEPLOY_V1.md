@@ -33,8 +33,8 @@ cp docs/examples/deploy.local.env.example .env
 docker compose --env-file .env up -d --build
 ```
 
-Default services: `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`.  
-*(Optional later: `prometheus`.)*
+Default services: `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`, `prometheus`.  
+Metrics: `GET /metrics` on each Python service; Prometheus UI at http://localhost:9090.
 
 ---
 

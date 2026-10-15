@@ -148,6 +148,24 @@ services:
     networks:
       - chinta-network
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: chinta-prometheus
+    restart: unless-stopped
+    logging: *chinta-logging
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - chinta-auth
+      - chinta-gateway
+      - chinta-backend
+      - chinta-platform
+      - chinta-ui
+    networks:
+      - chinta-network
+
   chinta-ui:
     logging: *chinta-logging
     build:

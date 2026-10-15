@@ -51,7 +51,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         duration_ms = int((time.perf_counter() - start) * 1000)
         response.headers[_REQUEST_ID_HEADER] = request_id
-        if request.url.path != "/health":
+        if request.url.path not in ("/health", "/metrics"):
             _ACCESS_LOGGER.info(
                 "request completed",
                 extra={
