@@ -47,8 +47,8 @@ services:
   chinta-auth:
     logging: *chinta-logging
     build:
-      context: ./chinta-auth
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chinta-auth/Dockerfile
     container_name: chinta-auth
     restart: unless-stopped
     ports:
@@ -58,6 +58,8 @@ services:
       - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
         required: false
     environment:
+      CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
+      CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
       OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
@@ -70,8 +72,8 @@ services:
   chinta-gateway:
     logging: *chinta-logging
     build:
-      context: ./chinta-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chinta-gateway/Dockerfile
     container_name: chinta-gateway
     restart: unless-stopped
     ports:
@@ -84,6 +86,8 @@ services:
       - path: ${CHINTA_DEPLOY_ENV:-/etc/chinta/deploy.env}
         required: false
     environment:
+      CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
+      CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
       CHINTA_AUTH_URL: ${CHINTA_AUTH_URL:-http://chinta-auth:8083}
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
@@ -97,8 +101,8 @@ services:
   chinta-platform:
     logging: *chinta-logging
     build:
-      context: ./chinta-platform
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chinta-platform/Dockerfile
     container_name: chinta-platform
     restart: unless-stopped
     ports:
@@ -108,6 +112,8 @@ services:
     depends_on:
       - chinta-db
     environment:
+      CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
+      CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
       CHINTA_PLATFORM_DATABASE_URL: postgresql://chinta_user:chinta_password@chinta-db:5432/chinta
       # No insecure compose default: a public :8085 + known token allows granting
       # membership on any tenant. Set explicitly in deploy.env / local shell.
@@ -119,8 +125,8 @@ services:
   chinta-backend:
     logging: *chinta-logging
     build:
-      context: ./chinta
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chinta/Dockerfile
     container_name: chinta-backend
     restart: unless-stopped
     ports:
@@ -130,6 +136,8 @@ services:
     depends_on:
       - chinta-db
     environment:
+      CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
+      CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
       CHINTA_DB_HOST: chinta-db
       CHINTA_DB_PORT: "5432"
       CHINTA_DB_NAME: chinta
@@ -143,8 +151,8 @@ services:
   chinta-ui:
     logging: *chinta-logging
     build:
-      context: ./chinta-ui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chinta-ui/Dockerfile
     container_name: chinta-ui
     restart: unless-stopped
     ports:
@@ -153,6 +161,8 @@ services:
       - chinta-gateway
       - chinta-auth
     environment:
+      CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
+      CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
       CHINTA_GATEWAY_URL: http://chinta-gateway:8084
       CHINTA_AUTH_URL: http://chinta-auth:8083
       CHINTA_PUBLIC_URL: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}

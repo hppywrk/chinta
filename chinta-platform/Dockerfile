@@ -1,11 +1,11 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY requirements.txt .
+COPY packages/chinta_observability packages/chinta_observability
+COPY chinta-platform chinta-platform
+WORKDIR /workspace/chinta-platform
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
 ENV CHINTA_PLATFORM_PORT=8085
 
 EXPOSE 8085

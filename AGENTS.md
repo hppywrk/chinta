@@ -30,6 +30,7 @@ The C++ sources under `chinta/src/` are legacy placeholders for a future rewrite
 - `/scripts`: `validate_openapi_specs.py`, `deploy/vm-deploy.sh`
 - `/rootfs/etc/systemd/system`: `chinta-compose.service` (optional boot wrapper for docker compose)
 - `/chinta-ui`: web UI service (pytest under `chinta-ui/test_*.py`)
+- `/packages/chinta_observability`: shared JSON logging + `X-Request-Id` middleware (editable dep in each service `requirements.txt`)
 - `docker-compose.yml`: default stack — `chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`; `chinta-net` under `full-stack` profile
 
 ### Local environment bootstrap
@@ -41,12 +42,9 @@ sudo apt-get install -y python3.12-venv
 python3.12 -m venv /workspace/.venv
 source /workspace/.venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r /workspace/chinta-auth/requirements.txt
-python -m pip install -r /workspace/chinta-gateway/requirements.txt
-python -m pip install -r /workspace/chinta/requirements.txt
-python -m pip install -r /workspace/chinta-platform/requirements.txt
-python -m pip install -r /workspace/chinta-admin/requirements.txt
-python -m pip install -r /workspace/chinta-ui/requirements.txt
+for svc in chinta-auth chinta-gateway chinta chinta-platform chinta-admin chinta-ui; do
+  (cd "/workspace/$svc" && python -m pip install -r requirements.txt)
+done
 ```
 
 Notes API requires PostgreSQL (e.g. `docker compose up -d chinta-db`).

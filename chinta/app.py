@@ -13,6 +13,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
+from chinta_observability import configure_logging, install_request_logging
+
 from auth_context import RequestContext, resolve_request_context
 from config import get_config
 from db import (
@@ -26,6 +28,9 @@ from db import (
 APP_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = APP_DIR / "api" / "chinta-openapi.yml"
 
+SERVICE_NAME = "chinta-backend"
+configure_logging(SERVICE_NAME)
+
 _cfg = get_config()
 _store = NotesStore(_cfg["database_url"], enforce_platform=_cfg["enforce_platform"])
 _auth_url = _cfg["auth_url"]
@@ -35,6 +40,7 @@ app = FastAPI(
     version="1.0.0",
     description="Multi-tenant notes editor backend",
 )
+install_request_logging(app, SERVICE_NAME)
 
 
 class NoteCreate(BaseModel):

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chinta-observability"
+version = "0.1.0"
+description = "Shared structured logging for Chinta Python services"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.26"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chinta_observability*"]
