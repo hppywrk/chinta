@@ -179,3 +179,20 @@ jobs:
           curl -sf http://127.0.0.1:8084/openapi.yaml | head -1 | grep -q '^openapi:'
           # Do not use -f: /me returns 401 by design; -f would make curl exit 22.
           curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8084/me | grep -q '401'
+
+  compose-functional:
+    name: Compose functional (product E7)
+    runs-on: ubuntu-latest
+    needs:
+      - openapi
+      - python-services
+      - chinta-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run compose functional test
+        run: bash scripts/compose-functional-test.sh

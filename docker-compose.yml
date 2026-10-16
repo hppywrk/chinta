@@ -41,6 +41,12 @@ services:
       POSTGRES_DB: chinta
       POSTGRES_USER: chinta_user
       POSTGRES_PASSWORD: chinta_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chinta_user -d chinta"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     networks:
       - chinta-network
 
@@ -110,7 +116,8 @@ services:
       # Admin CLI and local probes use localhost; gateway uses docker DNS.
       - "127.0.0.1:8085:8085"
     depends_on:
-      - chinta-db
+      chinta-db:
+        condition: service_healthy
     environment:
       CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
       CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}
@@ -134,7 +141,8 @@ services:
       # so a mis-set CHINTA_ENFORCE_PLATFORM cannot be probed from the network.
       - "127.0.0.1:8080:8080"
     depends_on:
-      - chinta-db
+      chinta-db:
+        condition: service_healthy
     environment:
       CHINTA_LOG_FORMAT: ${CHINTA_LOG_FORMAT:-json}
       CHINTA_LOG_LEVEL: ${CHINTA_LOG_LEVEL:-INFO}

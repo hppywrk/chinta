@@ -14,20 +14,24 @@ EMAIL="${CHINTA_DEMO_USER_EMAIL:-demo@example.com}"
 SUB="${CHINTA_DEMO_USER_SUB:-local-demo-sub}"
 NAME="${CHINTA_DEMO_TENANT_NAME:-Demo}"
 
-CLI=(python "${ROOT}/chinta-admin/cli.py")
+PYTHON="${PYTHON:-python3}"
+if ! command -v "${PYTHON}" >/dev/null 2>&1; then
+  PYTHON=python
+fi
+CLI=("${PYTHON}" "${ROOT}/chinta-admin/cli.py")
 
 if ! curl -sf "${CHINTA_PLATFORM_URL}/health" >/dev/null; then
   echo "seed-demo-tenant: platform not healthy at ${CHINTA_PLATFORM_URL}" >&2
   exit 1
 fi
 
-if "${CLI[@]}" tenant get --slug "${SLUG}" --output json >/dev/null 2>&1; then
+if "${CLI[@]}" --output json tenant get --slug "${SLUG}" >/dev/null 2>&1; then
   echo "seed-demo-tenant: tenant slug '${SLUG}' already exists"
   exit 0
 fi
 
-USER_JSON="$("${CLI[@]}" user create --email "${EMAIL}" --sub "${SUB}" --name "Demo User" --output json)"
-USER_ID="$(python -c "import json,sys; print(json.load(sys.stdin)['user_id'])" <<<"${USER_JSON}")"
+USER_JSON="$("${CLI[@]}" --output json user create --email "${EMAIL}" --sub "${SUB}" --name "Demo User")"
+USER_ID="$("${PYTHON}" -c "import json,sys; print(json.load(sys.stdin)['user_id'])" <<<"${USER_JSON}")"
 
-"${CLI[@]}" tenant create --slug "${SLUG}" --name "${NAME}" --owner-user-id "${USER_ID}" --output table
+"${CLI[@]}" tenant create --slug "${SLUG}" --name "${NAME}" --owner-user-id "${USER_ID}"
 echo "seed-demo-tenant: created tenant '${SLUG}' for ${EMAIL}"

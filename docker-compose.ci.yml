@@ -1,0 +1,10 @@
+# CI overlay for compose functional tests (E7). Not for production deploy.
+services:
+  chinta-auth:
+    environment:
+      OIDC_CLIENT_ID: ci
+      OIDC_CLIENT_SECRET: ci
+      CHINTA_AUTH_CI_STUB: "1"
+  chinta-platform:
+    environment:
+      CHINTA_PLATFORM_ADMIN_TOKEN: dev-admin-token-change-me

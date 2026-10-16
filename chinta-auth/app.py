@@ -155,6 +155,28 @@ def decode_jwt_payload_unverified(token: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def ci_stub_userinfo_enabled() -> bool:
+    """When set, /userinfo returns claims from an unsigned JWT (compose CI only)."""
+    return os.environ.get("CHINTA_AUTH_CI_STUB", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def userinfo_claims_from_ci_stub(access_token: str) -> dict | None:
+    if not ci_stub_userinfo_enabled():
+        return None
+    claims = decode_jwt_payload_unverified(access_token)
+    if not claims or not claims.get("sub"):
+        return None
+    out: dict = {"sub": str(claims["sub"])}
+    email = claims.get("email")
+    if isinstance(email, str) and email:
+        out["email"] = email
+    return out
+
+
 async def assert_access_token_audience(access_token: str) -> None:
     """Reject access tokens that were not issued to this OIDC client.
 
@@ -344,6 +366,9 @@ async def auth_callback(
 async def userinfo(access_token: str = Depends(get_token_from_header)):
     """Return OpenID Connect userinfo claims for the given access token."""
     await assert_access_token_audience(access_token)
+    stub_claims = userinfo_claims_from_ci_stub(access_token)
+    if stub_claims is not None:
+        return stub_claims
     client = await get_oidc_client()
     try:
         if not client.userinfo_endpoint:

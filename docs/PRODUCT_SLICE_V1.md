@@ -19,7 +19,7 @@ Related:
 
 | Goal | v1 outcome |
 |------|------------|
-| **UT / FT** | Pytest per service; CI smoke; compose-level functional test (planned) |
+| **UT / FT** | Pytest per service; CI smoke; compose functional test (`scripts/compose-functional-test.sh`) |
 | **Core stack** | `chinta-db`, `chinta-auth`, `chinta-gateway`, `chinta-backend` (notes), `chinta-platform` (minimal control plane) |
 | **Logging** | JSON structured logs on stdout in every Python service |
 | **Log rotation** | Docker `json-file` driver limits per service in compose |
@@ -220,4 +220,4 @@ Ordered epics; detail and DoD live in `IMPLEMENTATION_BACKLOG_V1.md` § Product 
 - [ ] `curl` health on 8083–8086; `curl` `/metrics` on each service
 - [ ] Prometheus shows all targets up
 - [ ] `pytest` green for all Python packages in CI
-- [ ] Compose functional test green in CI
+- [x] Compose functional test green in CI
