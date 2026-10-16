@@ -47,6 +47,28 @@ def _access_token(request: Request) -> str | None:
     return None
 
 
+def _session_cookie_secure() -> bool:
+    """Match gateway /auth/callback: Secure when the public origin is HTTPS."""
+    return get_config()["public_url"].lower().startswith("https://")
+
+
+def _clear_session_cookie(response: RedirectResponse) -> None:
+    """Clear the gateway session cookie.
+
+    Browsers require Path/Secure/SameSite to match the original Set-Cookie.
+    Gateway sets Secure when OIDC_REDIRECT_URI_BASE is https://…; a clear
+    without Secure leaves the cookie in place → logout no-ops and expired
+    tokens cause an /app ↔ /login redirect loop.
+    """
+    response.delete_cookie(
+        get_config()["session_cookie"],
+        path="/",
+        secure=_session_cookie_secure(),
+        httponly=True,
+        samesite="lax",
+    )
+
+
 def _redirect_login() -> RedirectResponse:
     return RedirectResponse(_url("/login"), status_code=302)
 
@@ -113,7 +135,7 @@ async def app_shell(request: Request):
     except GatewayError as exc:
         if exc.status_code in (401, 403):
             response = _redirect_login()
-            response.delete_cookie(cfg["session_cookie"], path="/")
+            _clear_session_cookie(response)
             return response
         error = "Could not load notes. Try again later."
 
@@ -143,16 +165,15 @@ async def notes_create(request: Request, body: str = Form(...)):
     except GatewayError as exc:
         if exc.status_code in (401, 403):
             response = _redirect_login()
-            response.delete_cookie(cfg["session_cookie"], path="/")
+            _clear_session_cookie(response)
             return response
     return RedirectResponse(_url("/app"), status_code=303)
 
 
 @app.get("/logout")
 async def logout():
-    cfg = get_config()
     response = RedirectResponse(_url("/login"), status_code=302)
-    response.delete_cookie(cfg["session_cookie"], path="/")
+    _clear_session_cookie(response)
     return response
 
 
