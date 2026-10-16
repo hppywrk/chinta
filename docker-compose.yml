@@ -92,7 +92,9 @@ services:
       CHINTA_BACKEND_URL: ${CHINTA_BACKEND_URL:-http://chinta-backend:8080}
       CHINTA_PLATFORM_URL: ${CHINTA_PLATFORM_URL:-http://chinta-platform:8085}
       CHINTA_UI_URL: ${CHINTA_UI_URL:-http://chinta-ui:8086}
-      CHINTA_WEB_URL: ${CHINTA_WEB_URL:-http://localhost:8084/ui}
+      # Path or absolute URL; gateway uses the path only for browser redirects so
+      # a leftover localhost absolute value cannot abandon the OAuth session cookie.
+      CHINTA_WEB_URL: ${CHINTA_WEB_URL:-/ui}
       OIDC_REDIRECT_URI_BASE: ${OIDC_REDIRECT_URI_BASE:-http://localhost:8084}
       CHINTA_GATEWAY_PORT: "8084"
     networks:
@@ -174,7 +176,8 @@ services:
     container_name: chinta-ui
     restart: unless-stopped
     ports:
-      - "8086:8086"
+      # Reached via gateway /ui proxy; host bind is for local probes only.
+      - "127.0.0.1:8086:8086"
     depends_on:
       - chinta-gateway
       - chinta-auth

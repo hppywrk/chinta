@@ -5,6 +5,7 @@ Interface described in api/gateway-openapi.yml.
 import os
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import yaml
@@ -40,13 +41,38 @@ install_metrics(app, SERVICE_NAME)
 security = HTTPBearer(auto_error=False)
 
 AUTH_BASE_URL = os.environ.get("CHINTA_AUTH_URL", "http://chinta-auth:8083")
-WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", "http://localhost:8084/ui")
+PUBLIC_BASE_URL = os.environ.get("OIDC_REDIRECT_URI_BASE", "http://localhost:8084").rstrip("/")
+# Prefer same public origin as OAuth; absolute localhost here breaks VM/public deploys
+# that only override OIDC_REDIRECT_URI_BASE (see config/deploy.env.example).
+WEB_UI_URL = os.environ.get("CHINTA_WEB_URL", f"{PUBLIC_BASE_URL}/ui")
 MOBILE_UI_URL = os.environ.get("CHINTA_MOBILE_URL", WEB_UI_URL)
 UI_INTERNAL_URL = os.environ.get("CHINTA_UI_URL", "http://chinta-ui:8086").rstrip("/")
 BACKEND_URL = os.environ.get("CHINTA_BACKEND_URL", "http://chinta-backend:8080")
 PLATFORM_BASE_URL = os.environ.get("CHINTA_PLATFORM_URL", "").strip()
-PUBLIC_BASE_URL = os.environ.get("OIDC_REDIRECT_URI_BASE", "http://localhost:8084").rstrip("/")
 SESSION_COOKIE_NAME = os.environ.get("CHINTA_SESSION_COOKIE", "chinta_access_token")
+
+# OAuth token responses must not be stored (RFC 6749 §5.1); session cookies inherit that.
+_SESSION_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
+
+
+def ui_browser_path(web_ui_url: str | None = None) -> str:
+    """Same-origin UI path for browser redirects (host taken from the request).
+
+    Post-login must not Location-redirect to an absolute CHINTA_WEB_URL host.
+    Session cookies are set for the gateway host that handled /auth/callback;
+    bouncing to http://localhost:... (compose/example default) drops the session
+    on any public OIDC_REDIRECT_URI_BASE deploy.
+    """
+    raw = (web_ui_url if web_ui_url is not None else WEB_UI_URL) or "/ui"
+    raw = raw.strip() or "/ui"
+    if "://" in raw:
+        path = urlparse(raw).path.strip() or "/ui"
+    else:
+        path = raw if raw.startswith("/") else f"/{raw}"
+    return path.rstrip("/") or "/ui"
 
 # Headers set by the gateway; clients must not spoof them on /api.
 _GATEWAY_INJECTED_HEADERS = frozenset(
@@ -109,16 +135,18 @@ async def root(request: Request):
     Convenience redirect to web/mobile UI (not part of gateway OpenAPI v1 contract).
     See docs/SPEC_DRIVEN_DEVELOPMENT.md backlog B_GW.2.
     """
+    # Relative Location keeps the browser on the host they used (public VM URL,
+    # not a hardcoded localhost CHINTA_WEB_URL).
     target = request.query_params.get("target")
     if target == "mobile":
-        return RedirectResponse(MOBILE_UI_URL)
+        return RedirectResponse(ui_browser_path(MOBILE_UI_URL))
     if target == "web":
-        return RedirectResponse(WEB_UI_URL)
+        return RedirectResponse(ui_browser_path(WEB_UI_URL))
 
     ua = request.headers.get("user-agent", "").lower()
     if "mobile" in ua or "android" in ua or "iphone" in ua:
-        return RedirectResponse(MOBILE_UI_URL)
-    return RedirectResponse(WEB_UI_URL)
+        return RedirectResponse(ui_browser_path(MOBILE_UI_URL))
+    return RedirectResponse(ui_browser_path(WEB_UI_URL))
 
 
 @app.get("/auth/callback")
@@ -159,14 +187,17 @@ async def browser_auth_callback(
     if not access_token:
         raise HTTPException(status_code=502, detail="Auth response missing access_token")
 
-    target = WEB_UI_URL.rstrip("/") + "/app"
-    response = RedirectResponse(url=target, status_code=302)
+    # Relative /ui/app — cookie is for this gateway host; absolute WEB_UI_URL
+    # (often still http://localhost:8084/ui in deploy.env) would abandon the session.
+    target = f"{ui_browser_path()}/app"
+    response = RedirectResponse(url=target, status_code=302, headers=_SESSION_RESPONSE_HEADERS)
     response.set_cookie(
         SESSION_COOKIE_NAME,
         access_token,
         httponly=True,
         samesite="lax",
         path="/",
+        secure=PUBLIC_BASE_URL.lower().startswith("https://"),
     )
     return response
 

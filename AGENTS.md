@@ -148,7 +148,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 
 - `docker compose --profile full-stack` still builds incomplete **chinta-net** image (`Dockerfile.chinta-net`).
 - Legacy root `Dockerfile.chinta` targets the old C++ binary; compose uses `chinta/Dockerfile` for **chinta-backend**.
-- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`) via `scripts/deploy/vm-deploy.sh`.
+- VM CD runs the default compose stack (`chinta-db`, `chinta-auth`, `chinta-backend`, `chinta-gateway`, `chinta-platform`, `chinta-ui`) via `scripts/deploy/vm-deploy.sh`.
 - `Dockerfile.cinta-db` is `FROM postgres:16` and COPY's `chinta-db/init.sql` as `docker-entrypoint-initdb.d/01_init.sql` (honors compose `POSTGRES_*`). Compose must not remount that file (duplicate `CREATE INDEX` aborts first-boot); platform DDL is mounted as `02_platform_core.sql`.
 - `chinta-compose.service` defaults to `/opt/chinta`; `vm-deploy.sh` rewrites paths when `CHINTA_ROOT` differs.
 - Auth service can start with dummy OIDC env vars, but real auth/token/userinfo flow requires valid IdP credentials.
@@ -156,7 +156,8 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - Gateway v1 OpenAPI contract excludes `GET /` UI redirect (see `docs/SPEC_DRIVEN_DEVELOPMENT.md`); route still exists for local dev.
 - GitHub Actions workflow `.github/workflows/ci.yml` runs on PRs and pushes to `main`; manual VM deploy is documented in `docs/CI_CD.md`.
 - For browser OAuth via gateway, `OIDC_REDIRECT_URI_BASE` must be the public origin (auth code default and compose both use `http://localhost:8084`); callback is `{base}/auth/callback`. Do not point it at auth `:8083` when the IdP redirects to the gateway — code exchange will fail.
-- Compose binds Postgres (`5432`), auth (`8083`), backend (`8080`), and platform (`8085`) to `127.0.0.1` only; gateway (`8084`) remains the public edge. Platform `POST /v1/access/resolve` is unauthenticated by design — do not publish `:8085` on `0.0.0.0`.
+- After browser OAuth, gateway redirects to a **relative** `/ui/app` (path from `CHINTA_WEB_URL`). An absolute `http://localhost:8084/ui` value must not override the public host that holds the session cookie.
+- Compose binds Postgres (`5432`), auth (`8083`), backend (`8080`), platform (`8085`), and UI (`8086`) to `127.0.0.1` only; gateway (`8084`) remains the public edge (`/ui` proxies to chinta-ui). Platform `POST /v1/access/resolve` is unauthenticated by design — do not publish `:8085` on `0.0.0.0`.
 - `chinta-compose.service` must not pass a mandatory `docker compose --env-file`; a missing `/etc/chinta/deploy.env` would stop the stack on systemd restart after `vm-deploy.sh`. Optional vars come from `EnvironmentFile=-`.
 - Auth `/userinfo` rejects access tokens whose `azp`/`aud` (introspection, JWT claims, or Google tokeninfo) does not include `OIDC_CLIENT_ID`, to block cross-app IdP token reuse.
 
