@@ -160,6 +160,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - Compose binds Postgres (`5432`), auth (`8083`), backend (`8080`), platform (`8085`), and UI (`8086`) to `127.0.0.1` only; gateway (`8084`) remains the public edge (`/ui` proxies to chinta-ui). Platform `POST /v1/access/resolve` is unauthenticated by design — do not publish `:8085` on `0.0.0.0`.
 - `chinta-compose.service` must not pass a mandatory `docker compose --env-file`; a missing `/etc/chinta/deploy.env` would stop the stack on systemd restart after `vm-deploy.sh`. Optional vars come from `EnvironmentFile=-`.
 - Auth `/userinfo` rejects access tokens whose `azp`/`aud` (introspection, JWT claims, or Google tokeninfo) does not include `OIDC_CLIENT_ID`, to block cross-app IdP token reuse.
+- Compose CI only: `docker-compose.ci.yml` sets `CHINTA_AUTH_CI_STUB=1` so `/userinfo` returns claims from an unsigned JWT (see `scripts/compose-functional-test.sh`). Never enable in production.
 
 ### Boundaries
 

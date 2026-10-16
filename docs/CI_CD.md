@@ -20,8 +20,11 @@ Runs on every **pull request** and every **push to `main`**.
 | **OpenAPI specs** | `python scripts/validate_openapi_specs.py` |
 | **Python services** | Install auth + gateway deps, `compileall`, import `app` modules |
 | **Smoke** | Start uvicorn for auth and gateway; `curl` health, OpenAPI, and `GET /me` → 401 |
+| **Compose functional (E7)** | `bash scripts/compose-functional-test.sh` — full product stack, seed, notes via gateway |
 
 No repository secrets are required for CI.
+
+Compose functional tests use `docker-compose.ci.yml` to enable `CHINTA_AUTH_CI_STUB` (unsigned JWT `/userinfo` for CI only). Do not enable that overlay in production deploys.
 
 ### Local parity
 
