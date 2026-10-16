@@ -3,11 +3,23 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from typing import Any
 
 from chinta_observability.context import get_request_id, get_service_name, set_service_name
+
+# httpx logs full request URLs at INFO, including query strings. Auth puts Google
+# tokeninfo access_token= and gateway OAuth code= in those URLs; never let that
+# reach stdout (compose json-file logs, log aggregators).
+_SENSITIVE_QUERY_RE = re.compile(
+    r"(?i)\b(access_token|refresh_token|id_token|code|client_secret)=([^&\s\"']+)"
+)
+
+
+def _redact_sensitive_query_params(message: str) -> str:
+    return _SENSITIVE_QUERY_RE.sub(r"\1=***", message)
 
 
 class _ChintaJsonFormatter(logging.Formatter):
@@ -16,7 +28,7 @@ class _ChintaJsonFormatter(logging.Formatter):
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "service": getattr(record, "service", None) or get_service_name() or "unknown",
-            "msg": record.getMessage(),
+            "msg": _redact_sensitive_query_params(record.getMessage()),
             "event": getattr(record, "event", None) or "log",
         }
         request_id = getattr(record, "request_id", None) or get_request_id()
@@ -29,6 +41,17 @@ class _ChintaJsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
+
+
+class _ChintaTextFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        original = record.msg
+        try:
+            if isinstance(record.msg, str):
+                record.msg = _redact_sensitive_query_params(record.msg)
+            return super().format(record)
+        finally:
+            record.msg = original
 
 
 class _ChintaContextFilter(logging.Filter):
@@ -61,7 +84,7 @@ def configure_logging(service_name: str) -> logging.Logger:
         handler.setFormatter(_ChintaJsonFormatter())
     else:
         handler.setFormatter(
-            logging.Formatter(
+            _ChintaTextFormatter(
                 fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s",
                 datefmt="%Y-%m-%dT%H:%M:%S%z",
             )
@@ -69,9 +92,16 @@ def configure_logging(service_name: str) -> logging.Logger:
     root.addHandler(handler)
     root.setLevel(level)
 
+    # Access lines come from RequestLoggingMiddleware (path only, no query).
+    # uvicorn.access includes ?code= / other secrets — keep it quiet.
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers.clear()
         logging.getLogger(name).propagate = True
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+    # httpx INFO is "HTTP Request: GET url?access_token=..." — drop to WARNING.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     logger = logging.getLogger(service_name)
     logger.setLevel(level)
