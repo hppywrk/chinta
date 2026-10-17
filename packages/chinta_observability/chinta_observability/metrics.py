@@ -29,6 +29,23 @@ SERVICE_UP = Gauge(
 )
 
 _QUIET_PATHS = frozenset({"/health", "/metrics"})
+# Unmatched / pre-routing failures must not use the raw URL path as a label —
+# clients can mint unbounded paths (e.g. /api/notes/{id}) and OOM the process.
+_UNMATCHED_ROUTE = "unmatched"
+
+
+def metrics_route_label(request: Request) -> str:
+    """Low-cardinality route template for Prometheus labels.
+
+    Prefer the matched FastAPI/Starlette route path (``/notes/{note_id}``,
+    ``/api/{path:path}``) over ``request.url.path``. Using the raw path makes
+    every note id (and every 404 probe) a permanent in-process time series.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None) if route is not None else None
+    if isinstance(template, str) and template:
+        return template
+    return _UNMATCHED_ROUTE
 
 
 def record_http_request(
@@ -63,7 +80,7 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
             record_http_request(
                 self._service_name,
                 request.method,
-                request.url.path,
+                metrics_route_label(request),
                 500,
                 time.perf_counter() - start,
             )
@@ -71,7 +88,7 @@ class RequestMetricsMiddleware(BaseHTTPMiddleware):
         record_http_request(
             self._service_name,
             request.method,
-            request.url.path,
+            metrics_route_label(request),
             status_code,
             time.perf_counter() - start,
         )
