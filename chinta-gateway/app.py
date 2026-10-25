@@ -364,11 +364,19 @@ async def proxy_api(
 
     decision = await _platform_decision(request, user)
 
+    # Drop every Authorization (any casing) before injecting the validated
+    # bearer. Starlette lowers incoming names, so copying items() and then
+    # setting headers["Authorization"] left two keys; httpx sent both and the
+    # backend's headers.get() prefers the first — which can be a different
+    # token than the one require_authenticated_user validated (duplicate
+    # Authorization request headers, or identity confusion when platform is
+    # enforced only at the gateway).
     headers = {
         k: v
         for k, v in request.headers.items()
         if k.lower() not in _HOP_BY_HOP_HEADERS
         and k.lower() not in _GATEWAY_INJECTED_HEADERS
+        and k.lower() != "authorization"
     }
     headers["Authorization"] = f"Bearer {user.access_token}"
     if decision and decision.schema_name:
