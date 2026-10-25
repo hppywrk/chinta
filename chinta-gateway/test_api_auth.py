@@ -43,10 +43,12 @@ class _BackendHandler(BaseHTTPRequestHandler):
     hits: list[dict] = []
 
     def do_GET(self):  # noqa: N802
+        auth_values = self.headers.get_all("Authorization") or []
         _BackendHandler.hits.append(
             {
                 "path": self.path,
                 "auth": self.headers.get("Authorization"),
+                "auth_all": auth_values,
             }
         )
         body = b'{"secret":true}'
@@ -132,3 +134,27 @@ def test_valid_bearer_is_proxied_to_backend(gateway_url):
     assert len(_BackendHandler.hits) == 1
     assert _BackendHandler.hits[0]["path"] == "/admin/users"
     assert _BackendHandler.hits[0]["auth"] == "Bearer good-token"
+    assert _BackendHandler.hits[0]["auth_all"] == ["Bearer good-token"]
+
+
+def test_duplicate_authorization_forwards_only_validated_bearer(gateway_url):
+    """Client duplicate Authorization must not reach the backend ahead of the validated token.
+
+    Gateway copies Starlette's lowercased ``authorization`` then sets
+    ``Authorization`` for the validated bearer. Without stripping the copy,
+    httpx forwards both and the backend prefers the first value — which can
+    be a different token than /userinfo validated.
+    """
+    _BackendHandler.hits.clear()
+    resp = httpx.get(
+        f"{gateway_url}/api/admin/users",
+        headers=[
+            ("Authorization", "Bearer good-token"),
+            ("Authorization", "Bearer other-token"),
+        ],
+        timeout=5,
+    )
+    assert resp.status_code == 200
+    assert len(_BackendHandler.hits) == 1
+    assert _BackendHandler.hits[0]["auth"] == "Bearer good-token"
+    assert _BackendHandler.hits[0]["auth_all"] == ["Bearer good-token"]
