@@ -91,15 +91,16 @@ async def auth_start():
     return RedirectResponse(data["authorize_url"], status_code=302)
 
 
-@app.get("/app", response_class=HTMLResponse)
-async def app_shell(request: Request):
-    token = _access_token(request)
-    if not token:
-        return _redirect_login()
-
+async def _render_app_shell(
+    request: Request,
+    token: str,
+    *,
+    error: str | None = None,
+    note_draft: str = "",
+) -> HTMLResponse | RedirectResponse:
+    """Render notes shell, or clear session and bounce to login on auth failure."""
     display_name = "User"
     notes: list[dict[str, Any]] = []
-    error: str | None = None
     cfg = get_config()
     try:
         me = await fetch_me(cfg["gateway_url"], token)
@@ -115,7 +116,8 @@ async def app_shell(request: Request):
             response = _redirect_login()
             response.delete_cookie(cfg["session_cookie"], path="/")
             return response
-        error = "Could not load notes. Try again later."
+        if error is None:
+            error = "Could not load notes. Try again later."
 
     page_title = f"{cfg['company_name']}: Notes - {display_name}"
     return templates.TemplateResponse(
@@ -128,8 +130,17 @@ async def app_shell(request: Request):
             "page_title": page_title,
             "notes": notes,
             "error": error,
+            "note_draft": note_draft,
         },
     )
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_shell(request: Request):
+    token = _access_token(request)
+    if not token:
+        return _redirect_login()
+    return await _render_app_shell(request, token)
 
 
 @app.post("/notes")
@@ -145,6 +156,13 @@ async def notes_create(request: Request, body: str = Form(...)):
             response = _redirect_login()
             response.delete_cookie(cfg["session_cookie"], path="/")
             return response
+        # Do not 303 on failure — that matches the success path and drops the draft.
+        return await _render_app_shell(
+            request,
+            token,
+            error="Could not save note. Try again.",
+            note_draft=body,
+        )
     return RedirectResponse(_url("/app"), status_code=303)
 
 

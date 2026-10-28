@@ -11,7 +11,7 @@
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
     <form method="post" action="{{ url('/notes') }}">
       <label for="body">New note</label>
-      <textarea id="body" name="body" required placeholder="Write something…"></textarea>
+      <textarea id="body" name="body" required placeholder="Write something…">{{ note_draft|default('') }}</textarea>
       <p style="margin-top: 0.75rem"><button class="btn" type="submit">Submit</button></p>
     </form>
     {% if notes %}

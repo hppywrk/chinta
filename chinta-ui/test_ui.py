@@ -52,3 +52,21 @@ def test_create_note_redirects(mock_create, client):
     assert r.status_code == 303
     assert r.headers["location"].endswith("/app")
     mock_create.assert_awaited_once()
+
+
+@patch("app.fetch_me", new_callable=AsyncMock)
+@patch("app.list_notes", new_callable=AsyncMock)
+@patch("app.create_note", new_callable=AsyncMock)
+def test_create_note_failure_preserves_draft(mock_create, mock_list, mock_me, client):
+    """Non-auth create failures must not look like success (silent draft loss)."""
+    from gateway_client import GatewayError
+
+    mock_create.side_effect = GatewayError(500, "upstream boom")
+    mock_me.return_value = {"sub": "u1", "name": "Ada"}
+    mock_list.return_value = []
+    draft = "important note that must survive a 500"
+    r = client.post("/notes", data={"body": draft}, cookies={"chinta_access_token": "tok"})
+    assert r.status_code == 200
+    assert "Could not save note" in r.text
+    assert draft in r.text
+    assert r.headers.get("location") is None
