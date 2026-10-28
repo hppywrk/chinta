@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -79,7 +80,8 @@ def cmd_user_get(args: argparse.Namespace) -> None:
     if args.id:
         path = f"/v1/users/{args.id}"
     elif args.email:
-        path = f"/v1/users/by-email/{args.email}"
+        # Quote so "a@b/../../tenants" cannot normalize into another admin route.
+        path = f"/v1/users/by-email/{quote(args.email, safe='')}"
     else:
         print("error: user get requires --id or --email", file=sys.stderr)
         sys.exit(2)
@@ -99,7 +101,10 @@ def cmd_tenant_get(args: argparse.Namespace) -> None:
     if not args.slug:
         print("error: tenant get requires --slug", file=sys.stderr)
         sys.exit(2)
-    _print_result(_request(args, "GET", f"/v1/tenants/by-slug/{args.slug}"), args.output)
+    _print_result(
+        _request(args, "GET", f"/v1/tenants/by-slug/{quote(args.slug, safe='')}"),
+        args.output,
+    )
 
 
 def cmd_tenant_list(args: argparse.Namespace) -> None:
@@ -109,7 +114,9 @@ def cmd_tenant_list(args: argparse.Namespace) -> None:
 
 
 def _tenant_id_for_slug(args: argparse.Namespace, slug: str) -> str:
-    tenant = _request(args, "GET", f"/v1/tenants/by-slug/{slug}")
+    # Quote path segment: httpx normalizes "../<uuid>" into GET /v1/tenants/<uuid>,
+    # which would make member remove/set target a tenant by id instead of slug.
+    tenant = _request(args, "GET", f"/v1/tenants/by-slug/{quote(slug, safe='')}")
     return tenant["tenant_id"]
 
 
