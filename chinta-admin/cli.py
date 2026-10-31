@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -27,6 +28,16 @@ def _token(args: argparse.Namespace) -> str:
 
 def _headers(args: argparse.Namespace) -> dict[str, str]:
     return {"Authorization": f"Bearer {_token(args)}"}
+
+
+def _path_segment(value: str) -> str:
+    """Percent-encode a single URL path segment.
+
+    httpx normalizes unescaped ``../`` in paths, so a crafted ``--user-id`` like
+    ``../../<tenant-uuid>/memberships/<user-uuid>`` would rewrite
+    ``/v1/tenants/{tid}/memberships/{user_id}`` onto another tenant.
+    """
+    return quote(value, safe="")
 
 
 def _print_result(data: Any, output: str) -> None:
@@ -77,7 +88,7 @@ def cmd_user_create(args: argparse.Namespace) -> None:
 
 def cmd_user_get(args: argparse.Namespace) -> None:
     if args.id:
-        path = f"/v1/users/{args.id}"
+        path = f"/v1/users/{_path_segment(args.id)}"
     elif args.email:
         path = f"/v1/users/by-email/{args.email}"
     else:
@@ -122,14 +133,23 @@ def cmd_member_set(args: argparse.Namespace) -> None:
     tid = _tenant_id_for_slug(args, args.tenant)
     body = {"role_code": args.role, "membership_status": "ACTIVE"}
     _print_result(
-        _request(args, "PUT", f"/v1/tenants/{tid}/memberships/{args.user_id}", json_body=body),
+        _request(
+            args,
+            "PUT",
+            f"/v1/tenants/{tid}/memberships/{_path_segment(args.user_id)}",
+            json_body=body,
+        ),
         args.output,
     )
 
 
 def cmd_member_remove(args: argparse.Namespace) -> None:
     tid = _tenant_id_for_slug(args, args.tenant)
-    _request(args, "DELETE", f"/v1/tenants/{tid}/memberships/{args.user_id}")
+    _request(
+        args,
+        "DELETE",
+        f"/v1/tenants/{tid}/memberships/{_path_segment(args.user_id)}",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
