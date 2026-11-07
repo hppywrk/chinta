@@ -30,6 +30,19 @@ SERVICE_UP = Gauge(
 
 _QUIET_PATHS = frozenset({"/health", "/metrics"})
 
+# HTTP method is client-controlled. Labeling metrics with the raw method lets an
+# unauthenticated caller mint unbounded time series (same OOM class as raw paths).
+_ALLOWED_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+_OTHER_METHOD = "other"
+
+
+def metrics_method_label(method: str) -> str:
+    """Low-cardinality HTTP method for Prometheus labels."""
+    normalized = (method or "").strip().upper()
+    if normalized in _ALLOWED_METHODS:
+        return normalized
+    return _OTHER_METHOD
+
 
 def record_http_request(
     service_name: str,
@@ -39,10 +52,13 @@ def record_http_request(
     duration_seconds: float,
 ) -> None:
     status = str(status_code)
-    HTTP_REQUESTS_TOTAL.labels(service=service_name, method=method, route=route, status=status).inc()
-    HTTP_REQUEST_DURATION_SECONDS.labels(service=service_name, method=method, route=route).observe(
-        duration_seconds
-    )
+    method_label = metrics_method_label(method)
+    HTTP_REQUESTS_TOTAL.labels(
+        service=service_name, method=method_label, route=route, status=status
+    ).inc()
+    HTTP_REQUEST_DURATION_SECONDS.labels(
+        service=service_name, method=method_label, route=route
+    ).observe(duration_seconds)
 
 
 class RequestMetricsMiddleware(BaseHTTPMiddleware):
