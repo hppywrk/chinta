@@ -128,6 +128,13 @@ def get_token_from_header(credentials: HTTPAuthorizationCredentials | None = Sec
 
 
 def audiences_from_claims(claims: dict) -> set[str]:
+    """Collect client identifiers from OIDC/OAuth audience-related claims.
+
+    Standard JWT / introspection use ``aud`` / ``azp``. Google's access-token
+    tokeninfo endpoint returns ``audience`` / ``issued_to`` instead (see
+    oauth2 v2 Tokeninfo). Ignoring those fields rejects every valid Google
+    opaque access token after login.
+    """
     out: set[str] = set()
     aud = claims.get("aud")
     if isinstance(aud, str) and aud:
@@ -137,6 +144,11 @@ def audiences_from_claims(claims: dict) -> set[str]:
     azp = claims.get("azp")
     if isinstance(azp, str) and azp:
         out.add(azp)
+    # Google tokeninfo (access_token=…) — not JWT claim names.
+    for key in ("audience", "issued_to"):
+        value = claims.get(key)
+        if isinstance(value, str) and value:
+            out.add(value)
     return out
 
 
@@ -160,8 +172,8 @@ async def assert_access_token_audience(access_token: str) -> None:
 
     IdP ``/userinfo`` alone accepts any valid access token for that user, so a
     token minted for another OAuth app (same Google account) would authenticate
-    to Chinta. Require azp/aud (introspection, JWT claims, or Google tokeninfo)
-    to include ``OIDC_CLIENT_ID``.
+    to Chinta. Require aud/azp (introspection or JWT) or Google tokeninfo
+    audience/issued_to to include ``OIDC_CLIENT_ID``.
     """
     cfg = get_config()
     client_id = (cfg["client_id"] or "").strip()

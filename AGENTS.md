@@ -159,7 +159,7 @@ Install all three Python `requirements.txt` files into the shared venv. Do not d
 - After browser OAuth, gateway redirects to a **relative** `/ui/app` (path from `CHINTA_WEB_URL`). An absolute `http://localhost:8084/ui` value must not override the public host that holds the session cookie.
 - Compose binds Postgres (`5432`), auth (`8083`), backend (`8080`), platform (`8085`), and UI (`8086`) to `127.0.0.1` only; gateway (`8084`) remains the public edge (`/ui` proxies to chinta-ui). Platform `POST /v1/access/resolve` is unauthenticated by design — do not publish `:8085` on `0.0.0.0`.
 - `chinta-compose.service` must not pass a mandatory `docker compose --env-file`; a missing `/etc/chinta/deploy.env` would stop the stack on systemd restart after `vm-deploy.sh`. Optional vars come from `EnvironmentFile=-`.
-- Auth `/userinfo` rejects access tokens whose `azp`/`aud` (introspection, JWT claims, or Google tokeninfo) does not include `OIDC_CLIENT_ID`, to block cross-app IdP token reuse.
+- Auth `/userinfo` rejects access tokens whose audience claims do not include `OIDC_CLIENT_ID` (`aud`/`azp` from introspection or JWT; Google access-token tokeninfo uses `audience`/`issued_to`), to block cross-app IdP token reuse.
 
 ### Boundaries
 
