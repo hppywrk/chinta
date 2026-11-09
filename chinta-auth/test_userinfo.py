@@ -5,12 +5,14 @@ token must be set on client.token (or sent as an Authorization header).
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 
 import httpx
 import pytest
 from authlib.integrations.httpx_client import AsyncOAuth2Client
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import app as auth_app
@@ -137,3 +139,92 @@ def test_userinfo_closes_oidc_client(client, monkeypatch):
 
 def test_audiences_from_claims_reads_azp_and_aud_list():
     assert auth_app.audiences_from_claims({"azp": "a", "aud": ["b", "c"]}) == {"a", "b", "c"}
+
+
+def test_audiences_from_claims_reads_google_tokeninfo_fields():
+    """Google access-token tokeninfo uses audience/issued_to, not aud/azp."""
+    assert auth_app.audiences_from_claims(
+        {
+            "issued_to": "client.apps.googleusercontent.com",
+            "audience": "client.apps.googleusercontent.com",
+            "scope": "openid email profile",
+            "expires_in": 3600,
+        }
+    ) == {"client.apps.googleusercontent.com"}
+
+
+def test_assert_audience_accepts_google_tokeninfo_fields(monkeypatch):
+    """Google opaque tokens: tokeninfo audience/issued_to must satisfy the check."""
+    monkeypatch.setenv("OIDC_CLIENT_ID", "test-client")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("OIDC_ISSUER", "https://accounts.google.com")
+    auth_app._oidc_metadata = {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+    }
+
+    opaque_token = "ya29.opaque-google-access-token"
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        assert "oauth2.googleapis.com/tokeninfo" in str(request.url)
+        assert request.url.params.get("access_token") == opaque_token
+        return httpx.Response(
+            200,
+            json={
+                "issued_to": "test-client",
+                "audience": "test-client",
+                "user_id": "user-1",
+                "scope": "openid email profile",
+                "expires_in": 3500,
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def async_client_with_transport(*args, **kwargs):
+        kwargs.setdefault("transport", transport)
+        return real_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(auth_app.httpx, "AsyncClient", async_client_with_transport)
+
+    asyncio.run(auth_app.assert_access_token_audience(opaque_token))
+    assert "tokeninfo" in seen["url"]
+
+
+def test_assert_audience_rejects_google_tokeninfo_foreign_client(monkeypatch):
+    monkeypatch.setenv("OIDC_CLIENT_ID", "test-client")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("OIDC_ISSUER", "https://accounts.google.com")
+    auth_app._oidc_metadata = {
+        "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "issued_to": "other-app-client",
+                "audience": "other-app-client",
+                "expires_in": 3500,
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def async_client_with_transport(*args, **kwargs):
+        kwargs.setdefault("transport", transport)
+        return real_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(auth_app.httpx, "AsyncClient", async_client_with_transport)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(auth_app.assert_access_token_audience("ya29.other-app-token"))
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["error"] == "invalid_token_audience"
